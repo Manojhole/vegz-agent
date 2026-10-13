@@ -1,0 +1,16 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+      DATABASE_URL: sqlite:////data/vegz_agent.db
+      JWT_SECRET: ${JWT_SECRET:-local-agent-secret-change-this-before-sharing}
+      AGENT_DEMO_CODE: ${AGENT_DEMO_CODE:-123456}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+    volumes:
+      - agent_data:/data
+    restart: unless-stopped
+volumes:
+  agent_data:
