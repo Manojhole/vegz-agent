@@ -298,13 +298,13 @@ def seed_demo_orders(agent: Agent = Depends(current_agent), db: Session = Depend
     if db.scalar(select(DeliveryOrder.id).where(DeliveryOrder.agent_id == agent.id).limit(1)) is not None:
         return {"message": "Sample deliveries already exist."}
     examples = [
-        dict(public_code="VGZ-DEMO-1001", shop_name="Green Basket Market", shop_phone="+919900000001",
+        dict(public_code=f"VGZ-DEMO-{agent.id:03d}-1001", shop_name="Green Basket Market", shop_phone="+919900000001",
              pickup_address="12 Market Road, Main Bazaar", customer_name="Ananya Rao", customer_phone="+919900000011",
              delivery_address="24 Lake View Street, Ward 3", delivery_instructions="Call on arrival. Blue gate.",
              item_summary="Tomato 2 kg, Potato 1 kg, Spinach 1 bunch", total_amount=Decimal("168.00"),
              delivery_fee=Decimal("25.00"), payment_method="cash", payment_status="pending", status="assigned",
              assigned_at=datetime.utcnow()),
-        dict(public_code="VGZ-DEMO-1002", shop_name="Daily Fresh Vegetables", shop_phone="+919900000002",
+        dict(public_code=f"VGZ-DEMO-{agent.id:03d}-1002", shop_name="Daily Fresh Vegetables", shop_phone="+919900000002",
              pickup_address="5 Station Cross, Vegetable Market", customer_name="Rahul Patil", customer_phone="+919900000022",
              delivery_address="Flat 3B, Shanti Residency, Bus Stand Road", delivery_instructions="Leave with security if unavailable.",
              item_summary="Onion 1 kg, Carrot 500 g", total_amount=Decimal("92.00"),
