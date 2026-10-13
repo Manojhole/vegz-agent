@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#176b45">
+<title>Vegz Agent — Delivery Partner</title><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<section id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="brand"><span class="brand-mark">v</span><span>vegz<span class="brand-light">agent</span></span></div>
+    <p class="eyebrow">DELIVERY PARTNER PORTAL</p><h1>Make every<br><span>delivery count.</span></h1>
+    <p class="muted">Your daily route, assigned orders and delivery progress — all in one place.</p>
+    <form id="login-form"><label for="agent-name">Your name</label><input id="agent-name" required minlength="2" maxlength="120" placeholder="Enter your name" value="Delivery Partner">
+      <label for="agent-phone">Mobile number</label><input id="agent-phone" type="tel" autocomplete="tel" required minlength="8" placeholder="+91 98765 43210">
+      <label for="agent-code">Development access code</label><input id="agent-code" required value="123456" inputmode="numeric" placeholder="Enter demo code">
+      <button class="btn primary full" type="submit">Open agent app <span>↗</span></button></form>
+    <p class="hint">Development sign-in only. Real agent accounts require verified OTP and admin approval before launch.</p>
+  </div>
+  <div class="login-art"><div class="art-label">DELIVER FRESH</div><div class="art-emoji">🛵 📦 🌿</div><h2>Good routes.<br>Fresh arrivals.</h2><p>Keep each delivery moving safely from the shop to the customer.</p><div class="art-bottom">Thanks for being part of the Vegz journey.</div></div>
+</section>
+
+<div id="app-shell" class="shell hidden">
+<aside class="sidebar">
+  <div class="brand"><span class="brand-mark">v</span><span>vegz<span class="brand-light">agent</span></span></div>
+  <div class="agent-mini"><div class="agent-avatar">🚲</div><div><strong id="sidebar-agent-name">Delivery Partner</strong><small>Delivery partner</small></div><span id="sidebar-online-dot" class="online-dot"></span></div>
+  <div class="online-control"><span id="online-label">You're offline</span><label class="switch"><input type="checkbox" id="online-toggle"><span class="slider"></span></label></div>
+  <nav id="nav"><button class="nav-item active" data-view="overview"><span>▦</span> Overview</button><button class="nav-item" data-view="deliveries"><span>▣</span> My deliveries <span id="nav-active-count" class="nav-count">0</span></button><button class="nav-item" data-view="history"><span>◷</span> Delivery history</button><button class="nav-item" data-view="profile"><span>⚙</span> My profile</button></nav>
+  <div class="safety-card-mini"><div class="help-icon">✦</div><strong>Ride safe</strong><p>Follow traffic rules, verify the order at pickup and protect customer information.</p></div>
+  <button id="logout-btn" class="logout-btn">↪ &nbsp; Sign out</button><div class="sidebar-foot">VEGZ AGENT · PARTNER APP</div>
+</aside>
+
+<main class="main">
+<header class="topbar"><div><div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumb-title">Overview</strong></div><h1 id="page-title">Ready to deliver? 👋</h1><p id="page-subtitle">Here's your delivery activity today.</p></div><div class="top-actions"><button id="refresh-btn" class="icon-btn" title="Refresh">↻</button><div class="profile"><div class="profile-avatar">A</div><div><strong id="top-agent-name">Delivery Partner</strong><small>Delivery partner</small></div></div></div></header>
+
+<section id="view-overview" class="view">
+  <div class="hero-strip"><div><span class="hero-kicker">YOUR DELIVERY DAY</span><h2>Every order matters. <span>Every stop counts.</span></h2><p>Stay updated, deliver with care and keep customers informed.</p></div><div class="hero-glyph">🛵</div></div>
+  <div class="stats-grid"><article class="stat-card"><div class="stat-top"><span>Active deliveries</span><span class="stat-icon lilac">▣</span></div><div id="stat-active" class="stat-value">0</div><div class="stat-foot">Assigned and in progress</div></article><article class="stat-card"><div class="stat-top"><span>Delivered today</span><span class="stat-icon green">✓</span></div><div id="stat-delivered" class="stat-value">0</div><div class="stat-foot">Completed drop-offs</div></article><article class="stat-card"><div class="stat-top"><span>Delivery fees</span><span class="stat-icon orange">₹</span></div><div id="stat-fees" class="stat-value">₹0</div><div class="stat-foot">Today's completed deliveries</div></article><article class="stat-card"><div class="stat-top"><span>Partner status</span><span class="stat-icon blue">●</span></div><div id="stat-online" class="stat-value small-value">Offline</div><div id="stat-online-foot" class="stat-foot">Switch online to be available</div></article></div>
+  <div class="section-heading"><div><h2>Next up</h2><p>Your active deliveries and what needs to happen next.</p></div><button class="text-btn" data-goto="deliveries">View all →</button></div>
+  <div id="overview-orders" class="delivery-list"></div>
+  <div class="section-heading"><div><h2>Quick safety check</h2><p>Before closing the delivery, make sure you've completed the essentials.</p></div></div>
+  <div class="safety-check-grid"><div class="safety-check"><span>01</span><div><strong>Verify pickup</strong><p>Check the order code and item count with the shop.</p></div></div><div class="safety-check"><span>02</span><div><strong>Contact respectfully</strong><p>Use the customer's shared details for delivery coordination only.</p></div></div><div class="safety-check"><span>03</span><div><strong>Confirm drop-off</strong><p>Record a delivery note before marking the order complete.</p></div></div></div>
+</section>
+
+<section id="view-deliveries" class="view hidden">
+  <div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="delivery-search" placeholder="Search order, shop or address..." aria-label="Search deliveries"></div><select id="delivery-filter" aria-label="Filter deliveries"><option value="active">Active deliveries</option><option value="assigned">New assignments</option><option value="all">All statuses</option></select></div>
+  <div id="delivery-list" class="delivery-list"></div><div id="deliveries-empty" class="empty-state hidden"><div>📦</div><h3>No deliveries here</h3><p>New assignments will appear when dispatch assigns a delivery to you.</p><button id="seed-btn" class="btn secondary">Load demo deliveries</button></div>
+</section>
+
+<section id="view-history" class="view hidden"><div class="history-summary" id="history-summary"></div><div id="history-list" class="delivery-list"></div><div id="history-empty" class="empty-state hidden"><div>🧾</div><h3>No completed deliveries yet</h3><p>Your delivery history will appear here after drop-offs are completed.</p></div></section>
+
+<section id="view-profile" class="view hidden"><div class="settings-layout"><div class="settings-card"><div class="settings-card-head"><div><h2>Partner profile</h2><p>Keep your contact and vehicle details current.</p></div><span class="settings-symbol">♙</span></div><form id="profile-form" class="settings-form"><label for="profile-name">Full name</label><input id="profile-name" required minlength="2" maxlength="120"><label for="profile-phone">Registered mobile</label><input id="profile-phone" disabled><label for="vehicle-type">Vehicle type</label><select id="vehicle-type"><option>Bike</option><option>Scooter</option><option>Bicycle</option><option>Motorcycle</option><option>Other</option></select><label for="vehicle-number">Vehicle registration (optional)</label><input id="vehicle-number" maxlength="20" placeholder="e.g. KA 01 AB 1234"><button class="btn primary" type="submit">Save profile</button></form></div>
+<div class="settings-card"><div class="settings-card-head"><div><h2>Work status</h2><p>Control whether you are available to receive assignments.</p></div><span class="settings-symbol">◷</span></div><div class="setting-row"><div><strong>Available for delivery</strong><p>Switch offline when you are done for the day or need a break.</p></div><label class="switch"><input type="checkbox" id="profile-online-toggle"><span class="slider"></span></label></div><div id="profile-status-note" class="availability-note"></div><div class="setting-row"><div><strong>Account verification</strong><p>Production access should be enabled after identity and vehicle verification.</p></div><span id="verified-pill" class="verification-pill">Pending</span></div></div>
+<div class="settings-card safety-wide"><div class="settings-symbol">ⓘ</div><div><h3>Privacy & safe delivery</h3><p>Customer addresses and phone numbers are for fulfilling assigned deliveries only. Don't save or share them outside the delivery process. Live GPS, verified OTP, dispatch assignment, alerts and digital proof-of-delivery storage must be connected before production rollout.</p></div></div></div></section>
+<footer class="main-footer"><span>© Vegz Agent</span><span>Deliver fresh. Deliver safely. <span class="footer-leaf">✦</span></span></footer>
+</main>
+</div>
+
+<dialog id="action-dialog" class="modal"><form id="action-form" method="dialog"><div class="modal-head"><div><span class="eyebrow">DELIVERY UPDATE</span><h2 id="action-title">Update delivery</h2><p id="action-description">Confirm the next step.</p></div><button type="button" id="close-action-dialog" class="close-btn" aria-label="Close">×</button></div><input id="action-order-id" type="hidden"><input id="action-name" type="hidden"><label id="action-note-label" for="action-note">Note</label><textarea id="action-note" rows="3" maxlength="300" placeholder="Add the required note"></textarea><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-action">Cancel</button><button type="submit" class="btn primary" id="confirm-action">Confirm update</button></div></form></dialog>
+<script src="/app.js" defer></script>
+</body></html>
