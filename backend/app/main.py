@@ -1,6 +1,7 @@
 import os
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import jwt
