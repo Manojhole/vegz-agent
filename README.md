@@ -7,7 +7,7 @@ Delivery-partner web app and API for the Vegz ecosystem. This is a separate serv
 - Responsive agent portal for mobile, tablet and desktop.
 - Development-only login and bearer-token session.
 - Agent profile and online/offline availability.
-- Agent-scoped delivery list, dashboard metrics, delivery history and customer/shop contact details for assigned orders.
+- Agent-scoped delivery list, dashboard metrics, delivery history, customer/shop contact details, and ordered pickup stops when a customer basket spans shops.
 - Delivery lifecycle: assigned -> accepted -> arrived at pickup -> picked up -> arrived at customer -> delivered.
 - Decline/return assignment reasons and required completion note before delivered status.
 - Sample deliveries for local workflow testing.
@@ -74,13 +74,14 @@ All routes except health and development login require an Authorization: Bearer 
 | PATCH | /api/orders/{id}/action | Update delivery workflow state |
 | POST | /api/location | Location API contract stub; does not persist GPS |
 | POST | /api/dev/seed | Create local demo deliveries |
+| POST | /api/internal/dispatch | Authenticated multi-shop dispatch from user service |
 
 ## Production readiness: blockers to resolve
 
 This is a production-oriented foundation, not a production-deployed delivery service. Do not deploy it as-is to handle real customer data.
 
 1. **Authentication and onboarding:** integrate SMS OTP or OIDC, agent verification/approval, device/session management, login rate limits, token revocation and audited role access.
-2. **Shared dispatch system:** customer orders from vegz-user do not automatically appear here. Create a shared order schema/event flow, assign orders server-side, validate assignment eligibility, and implement idempotent dispatch and reassignment.
+2. **Shared dispatch system:** customer orders from vegz-user do not automatically appear here. The authenticated `POST /api/internal/dispatch` contract now accepts multiple shop pickup stops and `DISPATCH_SHARED_SECRET`; configure the same secret in vegz-user and vegz-agent. The agent workflow advances through each pickup stop before moving to the customer. Harden dispatch idempotency, assignment selection and recovery before production.
 3. **Database:** add Alembic migrations, PostgreSQL/MySQL production provisioning, backups, retention policy and concurrency-safe transitions. Avoid automatic create_all for production schema management.
 4. **Location:** implement opt-in foreground/background GPS with OS permissions, sampling/rate limits, authenticated storage, retention limits, and real-time transport to dispatch/customer views. The current endpoint explicitly does not persist locations.
 5. **Proof of delivery:** add secure photo/signature or OTP confirmation storage with retention controls. Current completion uses a text note and is not tamper-resistant proof.
