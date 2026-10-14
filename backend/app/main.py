@@ -191,7 +191,7 @@ class InternalDispatch(BaseModel):
 def internal_dispatch_availability(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
     expected = os.getenv("DISPATCH_SHARED_SECRET", "")
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
-    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+    if len(expected) < 32 or "replace-with" in expected.lower() or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
     query = select(Agent).where(Agent.is_online.is_(True))
     if APP_ENV == "production":
@@ -209,7 +209,7 @@ def create_dispatch(
     """Internal dispatch contract for the user/order service; protect with a shared secret."""
     expected = os.getenv("DISPATCH_SHARED_SECRET", "")
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
-    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+    if len(expected) < 32 or "replace-with" in expected.lower() or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
     if db.scalar(select(DeliveryOrder.id).where(DeliveryOrder.public_code == payload.public_code)) is not None:
         raise HTTPException(status_code=409, detail="This delivery code already exists.")
