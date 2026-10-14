@@ -49,6 +49,7 @@ class DeliveryOrder(Base):
     agent_id: Mapped[int | None] = mapped_column(ForeignKey("agents.id"), nullable=True, index=True)
     shop_name: Mapped[str] = mapped_column(String(120), default="Vegz Partner Shop")
     pickup_stops: Mapped[str] = mapped_column(Text, default="[]")
+    pickup_progress: Mapped[int] = mapped_column(Integer, default=0)
     shop_phone: Mapped[str] = mapped_column(String(20), default="")
     pickup_address: Mapped[str] = mapped_column(String(400), default="")
     customer_name: Mapped[str] = mapped_column(String(120), default="Vegz customer")
@@ -79,6 +80,8 @@ with engine.begin() as connection:
     columns = {column["name"] for column in __import__("sqlalchemy").inspect(engine).get_columns("delivery_orders")}
     if "pickup_stops" not in columns:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_stops TEXT NOT NULL DEFAULT '[]'"))
+    if "pickup_progress" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_progress INTEGER NOT NULL DEFAULT 0"))
 
 app = FastAPI(title="Vegz Agent API", version="1.0.0", description="Delivery agent operations, availability and order progress.")
 app.add_middleware(
@@ -135,7 +138,7 @@ def agent_payload(agent: Agent):
 def order_payload(o: DeliveryOrder):
     return {
         "id": o.id, "code": o.public_code, "shop_name": o.shop_name, "shop_phone": o.shop_phone,
-        "pickup_stops": json.loads(o.pickup_stops or "[]"),
+        "pickup_stops": json.loads(o.pickup_stops or "[]"), "pickup_progress": o.pickup_progress,
         "pickup_address": o.pickup_address, "customer_name": o.customer_name, "customer_phone": o.customer_phone,
         "delivery_address": o.delivery_address, "delivery_instructions": o.delivery_instructions,
         "item_summary": o.item_summary, "total_amount": float(o.total_amount or 0),
@@ -333,8 +336,16 @@ def order_action(order_id: int, payload: OrderAction, agent: Agent = Depends(cur
     elif action == "arrived_at_pickup":
         order.status = "arrived_at_pickup"
     elif action == "picked_up":
-        order.status = "picked_up"
-        order.picked_up_at = now
+        try:
+            stops = json.loads(order.pickup_stops or "[]")
+        except (TypeError, ValueError):
+            stops = []
+        if stops and order.pickup_progress < len(stops) - 1:
+            order.pickup_progress += 1
+            order.status = "accepted"
+        else:
+            order.status = "picked_up"
+            order.picked_up_at = now
     elif action == "arrived_at_customer":
         order.status = "arrived_at_customer"
     elif action == "delivered":
