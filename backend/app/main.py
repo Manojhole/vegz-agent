@@ -211,8 +211,9 @@ def create_dispatch(
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
     if len(expected) < 32 or "replace-with" in expected.lower() or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
-    if db.scalar(select(DeliveryOrder.id).where(DeliveryOrder.public_code == payload.public_code)) is not None:
-        raise HTTPException(status_code=409, detail="This delivery code already exists.")
+    existing_order = db.scalar(select(DeliveryOrder).where(DeliveryOrder.public_code == payload.public_code))
+    if existing_order is not None:
+        return order_payload(existing_order)
     stops = [stop.model_dump() for stop in payload.pickup_stops]
     primary = stops[0]
     agent_query = select(Agent).where(Agent.is_online.is_(True))
