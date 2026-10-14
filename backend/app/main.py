@@ -187,6 +187,19 @@ class InternalDispatch(BaseModel):
     payment_status: str = Field(default="pending", max_length=24)
 
 
+@app.get("/api/internal/availability")
+def internal_dispatch_availability(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    expected = os.getenv("DISPATCH_SHARED_SECRET", "")
+    supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
+    query = select(Agent).where(Agent.is_online.is_(True))
+    if APP_ENV == "production":
+        query = query.where(Agent.is_verified.is_(True))
+    agent = db.scalar(query.order_by(Agent.created_at))
+    return {"available": agent is not None}
+
+
 @app.post("/api/internal/dispatch", status_code=201)
 def create_dispatch(
     payload: InternalDispatch,
