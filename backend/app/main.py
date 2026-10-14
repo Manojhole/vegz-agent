@@ -202,8 +202,11 @@ def create_dispatch(
         raise HTTPException(status_code=409, detail="This delivery code already exists.")
     stops = [stop.model_dump() for stop in payload.pickup_stops]
     primary = stops[0]
-    agent = db.scalar(select(Agent).where(Agent.is_online.is_(True)).order_by(Agent.created_at))
-    if APP_ENV == "production" and (agent is None or not agent.is_verified):
+    agent_query = select(Agent).where(Agent.is_online.is_(True))
+    if APP_ENV == "production":
+        agent_query = agent_query.where(Agent.is_verified.is_(True))
+    agent = db.scalar(agent_query.order_by(Agent.created_at))
+    if APP_ENV == "production" and agent is None:
         raise HTTPException(status_code=409, detail="No verified agent is currently online.")
     order = DeliveryOrder(
         public_code=payload.public_code,
