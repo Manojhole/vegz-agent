@@ -1,5 +1,7 @@
+import json
 import os
 import re
+import secrets
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -46,6 +48,7 @@ class DeliveryOrder(Base):
     public_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     agent_id: Mapped[int | None] = mapped_column(ForeignKey("agents.id"), nullable=True, index=True)
     shop_name: Mapped[str] = mapped_column(String(120), default="Vegz Partner Shop")
+    pickup_stops: Mapped[str] = mapped_column(Text, default="[]")
     shop_phone: Mapped[str] = mapped_column(String(20), default="")
     pickup_address: Mapped[str] = mapped_column(String(400), default="")
     customer_name: Mapped[str] = mapped_column(String(120), default="Vegz customer")
@@ -72,6 +75,10 @@ class DeliveryOrder(Base):
 
 
 Base.metadata.create_all(bind=engine)
+with engine.begin() as connection:
+    columns = {column["name"] for column in __import__("sqlalchemy").inspect(engine).get_columns("delivery_orders")}
+    if "pickup_stops" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_stops TEXT NOT NULL DEFAULT '[]'"))
 
 app = FastAPI(title="Vegz Agent API", version="1.0.0", description="Delivery agent operations, availability and order progress.")
 app.add_middleware(
@@ -128,6 +135,7 @@ def agent_payload(agent: Agent):
 def order_payload(o: DeliveryOrder):
     return {
         "id": o.id, "code": o.public_code, "shop_name": o.shop_name, "shop_phone": o.shop_phone,
+        "pickup_stops": json.loads(o.pickup_stops or "[]"),
         "pickup_address": o.pickup_address, "customer_name": o.customer_name, "customer_phone": o.customer_phone,
         "delivery_address": o.delivery_address, "delivery_instructions": o.delivery_instructions,
         "item_summary": o.item_summary, "total_amount": float(o.total_amount or 0),
@@ -153,6 +161,69 @@ def current_agent(authorization: str | None = Header(default=None), db: Session 
     if agent is None:
         raise HTTPException(status_code=401, detail="Delivery agent account not found.")
     return agent
+
+
+class DispatchStop(BaseModel):
+    shop_name: str = Field(min_length=2, max_length=120)
+    shop_phone: str = Field(default="", max_length=20)
+    pickup_address: str = Field(min_length=3, max_length=400)
+    item_summary: str = Field(default="", max_length=2000)
+    shop_order_id: str = Field(default="", max_length=80)
+
+
+class InternalDispatch(BaseModel):
+    public_code: str = Field(min_length=4, max_length=32)
+    customer_name: str = Field(min_length=2, max_length=120)
+    customer_phone: str = Field(default="", max_length=20)
+    delivery_address: str = Field(min_length=4, max_length=500)
+    delivery_instructions: str = Field(default="", max_length=300)
+    pickup_stops: list[DispatchStop] = Field(min_length=1, max_length=10)
+    total_amount: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+    delivery_fee: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+    payment_method: str = Field(default="cod", max_length=24)
+    payment_status: str = Field(default="pending", max_length=24)
+
+
+@app.post("/api/internal/dispatch", status_code=201)
+def create_dispatch(
+    payload: InternalDispatch,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Internal dispatch contract for the user/order service; protect with a shared secret."""
+    expected = os.getenv("DISPATCH_SHARED_SECRET", "")
+    supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
+    if db.scalar(select(DeliveryOrder.id).where(DeliveryOrder.public_code == payload.public_code)) is not None:
+        raise HTTPException(status_code=409, detail="This delivery code already exists.")
+    stops = [stop.model_dump() for stop in payload.pickup_stops]
+    primary = stops[0]
+    agent = db.scalar(select(Agent).where(Agent.is_online.is_(True)).order_by(Agent.created_at))
+    if APP_ENV == "production" and (agent is None or not agent.is_verified):
+        raise HTTPException(status_code=409, detail="No verified agent is currently online.")
+    order = DeliveryOrder(
+        public_code=payload.public_code,
+        agent_id=agent.id if agent else None,
+        shop_name=primary["shop_name"],
+        shop_phone=primary["shop_phone"],
+        pickup_address=primary["pickup_address"],
+        pickup_stops=json.dumps(stops),
+        customer_name=payload.customer_name,
+        customer_phone=payload.customer_phone,
+        delivery_address=payload.delivery_address,
+        delivery_instructions=payload.delivery_instructions,
+        item_summary="; ".join(f'{stop["shop_name"]}: {stop["item_summary"]}' for stop in stops),
+        total_amount=payload.total_amount,
+        delivery_fee=payload.delivery_fee,
+        payment_method=payload.payment_method,
+        payment_status=payload.payment_status,
+        status="assigned",
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    return order_payload(order)
 
 
 @app.get("/api/health")
