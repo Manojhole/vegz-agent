@@ -27,10 +27,21 @@ class AgentApiTests(unittest.TestCase):
 
     def test_profile_and_online_state(self):
         headers = self.login("+919800000101")
+        from backend.app.main import Agent, SessionLocal
+        with SessionLocal() as db:
+            agent = db.query(Agent).filter_by(phone="+919800000101").first()
+            agent.is_verified = True
+            db.commit()
         response = client.patch("/api/me", headers=headers, json={"is_online": True, "vehicle_type": "Scooter"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_online"])
         self.assertEqual(response.json()["vehicle_type"], "Scooter")
+
+    def test_unapproved_agent_cannot_go_online(self):
+        headers = self.login("+919800000103")
+        response = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("awaiting admin approval", response.json()["detail"])
 
     def test_seed_and_delivery_lifecycle(self):
         headers = self.login("+919800000102")
