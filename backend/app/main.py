@@ -281,7 +281,14 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
     if APP_ENV == "production":
         raise HTTPException(status_code=503, detail="Configure verified OTP authentication before production sign-in.")
     digits = re.sub(r"\D", "", payload.phone)
-    phone = re.sub(r"[^0-9+]", "", payload.phone)
+    if len(digits) >= 12 and digits.startswith("91"):
+        digits = digits[-10:]
+    if len(digits) == 10:
+        phone = "+91" + digits
+    elif len(digits) >= 8:
+        phone = "+" + digits
+    else:
+        phone = ""
     if len(digits) < 8:
         raise HTTPException(status_code=400, detail="Enter a valid mobile number.")
     if payload.code != os.getenv("AGENT_DEMO_CODE", "123456"):
