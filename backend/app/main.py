@@ -283,8 +283,8 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
     else:
         agent.full_name = payload.full_name
         agent.city = city
-        db.commit()
-        db.refresh(agent)
+    db.commit()
+    db.refresh(agent)
     token = jwt.encode({"agent_id": agent.id, "exp": datetime.utcnow() + timedelta(days=7)}, JWT_SECRET, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer", "agent": agent_payload(agent)}
 
