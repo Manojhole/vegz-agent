@@ -2,6 +2,7 @@ import json
 import os
 import re
 import secrets
+import httpx
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -19,6 +20,10 @@ load_dotenv()
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./vegz_agent.db")
 JWT_SECRET = os.getenv("JWT_SECRET", "local-dev-only-change-this-secret")
+PARTNER_ADMIN_TOKEN = os.getenv("PARTNER_ADMIN_TOKEN", "vegz-local-partner-token-change-before-production")
+ADMIN_SERVICE_URL = os.getenv("ADMIN_SERVICE_URL", "http://host.docker.internal:8000" if APP_ENV == "development" else "").rstrip("/")
+if APP_ENV == "production" and (len(PARTNER_ADMIN_TOKEN) < 32 or "replace-with" in PARTNER_ADMIN_TOKEN.lower() or "change-before-production" in PARTNER_ADMIN_TOKEN or not ADMIN_SERVICE_URL):
+    raise RuntimeError("Configure ADMIN_SERVICE_URL and a unique PARTNER_ADMIN_TOKEN before production.")
 engine_kwargs = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
@@ -216,8 +221,7 @@ def internal_dispatch_availability(city: str = Query(default="Hubli", min_length
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
     normalized_city = " ".join(city.split()).casefold()
     query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == normalized_city)
-    if APP_ENV == "production":
-        query = query.where(Agent.is_verified.is_(True))
+    query = query.where(Agent.is_verified.is_(True))
     agent = db.scalar(query.order_by(Agent.created_at))
     return {"available": agent is not None, "city": " ".join(city.split()).title()}
 
@@ -240,8 +244,7 @@ def create_dispatch(
     primary = stops[0]
     delivery_city = " ".join(payload.delivery_city.split()).title()
     agent_query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == delivery_city.casefold())
-    if APP_ENV == "production":
-        agent_query = agent_query.where(Agent.is_verified.is_(True))
+    agent_query = agent_query.where(Agent.is_verified.is_(True))
     agent = db.scalar(agent_query.order_by(Agent.created_at))
     if agent is None:
         raise HTTPException(status_code=409, detail="No eligible agent is currently online. Ask an agent to go online and retry.")
@@ -270,6 +273,30 @@ def create_dispatch(
     return order_payload(order)
 
 
+class AdminApprovalIn(BaseModel):
+    phone: str = Field(min_length=8, max_length=24)
+    status: str = Field(pattern=r"^(approved|rejected|suspended|pending)$")
+
+
+@app.post("/api/internal/admin-approval")
+def admin_approval(payload: AdminApprovalIn, authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    expected = PARTNER_ADMIN_TOKEN
+    supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Partner approval authentication failed.")
+    digits = re.sub(r"\D", "", payload.phone)
+    phone = "+91" + digits[-10:] if len(digits) >= 10 and (len(digits) == 10 or digits.startswith("91")) else re.sub(r"[^0-9+]", "", payload.phone)
+    agent = db.scalar(select(Agent).where(Agent.phone == phone))
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent registration not found.")
+    agent.is_verified = payload.status == "approved"
+    if not agent.is_verified:
+        agent.is_online = False
+    db.commit()
+    db.refresh(agent)
+    return agent_payload(agent)
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "vegz-agent-api"}
@@ -281,7 +308,14 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
     if APP_ENV == "production":
         raise HTTPException(status_code=503, detail="Configure verified OTP authentication before production sign-in.")
     digits = re.sub(r"\D", "", payload.phone)
-    phone = re.sub(r"[^0-9+]", "", payload.phone)
+    if len(digits) >= 12 and digits.startswith("91"):
+        digits = digits[-10:]
+    if len(digits) == 10:
+        phone = "+91" + digits
+    elif len(digits) >= 8:
+        phone = "+" + digits
+    else:
+        phone = ""
     if len(digits) < 8:
         raise HTTPException(status_code=400, detail="Enter a valid mobile number.")
     if payload.code != os.getenv("AGENT_DEMO_CODE", "123456"):
@@ -296,6 +330,18 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
         agent.city = city
     db.commit()
     db.refresh(agent)
+    admin_url = ADMIN_SERVICE_URL
+    admin_token = PARTNER_ADMIN_TOKEN
+    if admin_url and len(admin_token) >= 32:
+        try:
+            response = httpx.post(admin_url + "/api/internal/partner-requests/agent", headers={"Authorization": "Bearer " + admin_token}, json={
+                "full_name": agent.full_name, "phone": agent.phone, "city": agent.city,
+                "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number, "external_ref": str(agent.id)
+            }, timeout=5.0)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            if APP_ENV == "production":
+                raise HTTPException(status_code=503, detail="Could not submit delivery partner registration for admin review.")
     token = jwt.encode({"agent_id": agent.id, "exp": datetime.utcnow() + timedelta(days=7)}, JWT_SECRET, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer", "agent": agent_payload(agent)}
 
@@ -308,6 +354,8 @@ def get_me(agent: Agent = Depends(current_agent)):
 @app.patch("/api/me")
 def update_me(payload: AgentProfilePatch, agent: Agent = Depends(current_agent), db: Session = Depends(get_db)):
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("is_online") is True and not agent.is_verified:
+        raise HTTPException(status_code=403, detail="Your delivery partner application is awaiting admin approval. You can go online after approval.")
     if changes.get("city"):
         changes["city"] = " ".join(changes["city"].split()).title()
     if changes.get("city") and changes["city"] != agent.city and changes.get("is_online", agent.is_online):

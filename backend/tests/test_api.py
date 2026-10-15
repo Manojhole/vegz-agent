@@ -8,6 +8,8 @@ os.environ["DATABASE_URL"] = "sqlite:///" + db_file.name
 os.environ["APP_ENV"] = "development"
 os.environ["JWT_SECRET"] = "test-secret-with-sufficient-length-for-tests"
 os.environ["AGENT_DEMO_CODE"] = "123456"
+os.environ["PARTNER_ADMIN_TOKEN"] = "test-partner-admin-token-that-is-long-enough"
+os.environ["ADMIN_SERVICE_URL"] = ""
 
 from fastapi.testclient import TestClient
 from backend.app.main import app
@@ -27,10 +29,31 @@ class AgentApiTests(unittest.TestCase):
 
     def test_profile_and_online_state(self):
         headers = self.login("+919800000101")
+        from backend.app.main import Agent, SessionLocal
+        with SessionLocal() as db:
+            agent = db.query(Agent).filter_by(phone="+919800000101").first()
+            agent.is_verified = True
+            db.commit()
         response = client.patch("/api/me", headers=headers, json={"is_online": True, "vehicle_type": "Scooter"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_online"])
         self.assertEqual(response.json()["vehicle_type"], "Scooter")
+
+    def test_admin_approval_enables_agent_online_state(self):
+        headers = self.login("+919800000106")
+        blocked = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(blocked.status_code, 403)
+        approved = client.post("/api/internal/admin-approval", headers={"Authorization": "Bearer test-partner-admin-token-that-is-long-enough"}, json={"phone": "+919800000106", "status": "approved"})
+        self.assertEqual(approved.status_code, 200, approved.text)
+        online = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(online.status_code, 200, online.text)
+        self.assertTrue(online.json()["is_verified"])
+
+    def test_unapproved_agent_cannot_go_online(self):
+        headers = self.login("+919800000103")
+        response = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("awaiting admin approval", response.json()["detail"])
 
     def test_seed_and_delivery_lifecycle(self):
         headers = self.login("+919800000102")

@@ -24,6 +24,9 @@ function renderAll(){
  if(!state.agent)return;const a=state.agent,orders=state.orders,active=activeOrders(),done=orders.filter(o=>o.status==="delivered"&&o.delivered_at&&o.delivered_at.slice(0,10)===new Date().toISOString().slice(0,10));
  $("#sidebar-agent-name").textContent=a.full_name;$("#top-agent-name").textContent=a.full_name;$("#profile-name").value=a.full_name;$("#profile-phone").value=a.phone;$("#vehicle-type").value=a.vehicle_type||"Bike";$("#vehicle-number").value=a.vehicle_number||"";$("#profile-city").value=a.city||"Hubli";
  $("#online-toggle").checked=a.is_online;$("#profile-online-toggle").checked=a.is_online;$("#online-label").textContent=a.is_online?"You're online":"You're offline";$("#sidebar-online-dot").classList.toggle("active",a.is_online);
+ const approved = Boolean(a.is_verified);
+ $("#approval-notice").classList.toggle("hidden", approved);
+ $("#online-toggle").disabled = !approved; $("#profile-online-toggle").disabled = !approved;
  $("#stat-active").textContent=active.length;$("#stat-delivered").textContent=done.length;$("#stat-fees").textContent=money(done.reduce((s,o)=>s+Number(o.delivery_fee||0),0));$("#stat-online").textContent=a.is_online?"Online":"Offline";$("#stat-online-foot").textContent=a.is_online?"You're available for assignments":"Switch online when you're ready";$("#nav-active-count").textContent=active.length;$("#verified-pill").textContent=a.is_verified?"Verified":"Pending";$("#profile-status-note").textContent=a.is_online?"You are online. Your dispatch team can assign new deliveries.":"You are offline. You may not receive new assignments.";
  const upcoming=active.slice(0,3);$("#overview-orders").innerHTML=upcoming.map(o=>renderOrder(o,true)).join("")||emptyInline("You're all caught up","New assigned deliveries will appear here.");renderDeliveries();renderHistory();
 }
