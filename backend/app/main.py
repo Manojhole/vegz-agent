@@ -21,6 +21,7 @@ APP_ENV = os.getenv("APP_ENV", "development").lower()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./vegz_agent.db")
 JWT_SECRET = os.getenv("JWT_SECRET", "local-dev-only-change-this-secret")
 PARTNER_ADMIN_TOKEN = os.getenv("PARTNER_ADMIN_TOKEN", "vegz-local-partner-token-change-before-production")
+DISPATCH_SHARED_SECRET = os.getenv("DISPATCH_SHARED_SECRET", "vegz-local-agent-dispatch-token-change-before-production" if APP_ENV == "development" else "")
 ADMIN_SERVICE_URL = os.getenv("ADMIN_SERVICE_URL", "http://host.docker.internal:8000" if APP_ENV == "development" else "").rstrip("/")
 if APP_ENV == "production" and (len(PARTNER_ADMIN_TOKEN) < 32 or "replace-with" in PARTNER_ADMIN_TOKEN.lower() or "change-before-production" in PARTNER_ADMIN_TOKEN or not ADMIN_SERVICE_URL):
     raise RuntimeError("Configure ADMIN_SERVICE_URL and a unique PARTNER_ADMIN_TOKEN before production.")
@@ -215,7 +216,7 @@ class InternalDispatch(BaseModel):
 
 @app.get("/api/internal/availability")
 def internal_dispatch_availability(city: str = Query(default="Hubli", min_length=2, max_length=100), authorization: str | None = Header(default=None), db: Session = Depends(get_db)): 
-    expected = os.getenv("DISPATCH_SHARED_SECRET", "")
+    expected = DISPATCH_SHARED_SECRET
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
     if len(expected) < 32 or "replace-with" in expected.lower() or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
