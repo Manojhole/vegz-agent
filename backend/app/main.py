@@ -2,6 +2,7 @@ import json
 import os
 import re
 import secrets
+import httpx
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -270,6 +271,30 @@ def create_dispatch(
     return order_payload(order)
 
 
+class AdminApprovalIn(BaseModel):
+    phone: str = Field(min_length=8, max_length=24)
+    status: str = Field(pattern=r"^(approved|rejected|suspended|pending)$")
+
+
+@app.post("/api/internal/admin-approval")
+def admin_approval(payload: AdminApprovalIn, authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    expected = os.getenv("PARTNER_ADMIN_TOKEN", "")
+    supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
+    if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Partner approval authentication failed.")
+    digits = re.sub(r"\\D", "", payload.phone)
+    phone = "+91" + digits[-10:] if len(digits) >= 10 and (len(digits) == 10 or digits.startswith("91")) else re.sub(r"[^0-9+]", "", payload.phone)
+    agent = db.scalar(select(Agent).where(Agent.phone == phone))
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent registration not found.")
+    agent.is_verified = payload.status == "approved"
+    if not agent.is_verified:
+        agent.is_online = False
+    db.commit()
+    db.refresh(agent)
+    return agent_payload(agent)
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "vegz-agent-api"}
@@ -303,6 +328,18 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
         agent.city = city
     db.commit()
     db.refresh(agent)
+    admin_url = os.getenv("ADMIN_SERVICE_URL", "").rstrip("/")
+    admin_token = os.getenv("PARTNER_ADMIN_TOKEN", "")
+    if admin_url and len(admin_token) >= 32:
+        try:
+            response = httpx.post(admin_url + "/api/internal/partner-requests/agent", headers={"Authorization": "Bearer " + admin_token}, json={
+                "full_name": agent.full_name, "phone": agent.phone, "city": agent.city,
+                "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number, "external_ref": str(agent.id)
+            }, timeout=5.0)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            if APP_ENV == "production":
+                raise HTTPException(status_code=503, detail="Could not submit delivery partner registration for admin review.")
     token = jwt.encode({"agent_id": agent.id, "exp": datetime.utcnow() + timedelta(days=7)}, JWT_SECRET, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer", "agent": agent_payload(agent)}
 
