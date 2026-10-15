@@ -8,6 +8,7 @@ os.environ["DATABASE_URL"] = "sqlite:///" + db_file.name
 os.environ["APP_ENV"] = "development"
 os.environ["JWT_SECRET"] = "test-secret-with-sufficient-length-for-tests"
 os.environ["AGENT_DEMO_CODE"] = "123456"
+os.environ["PARTNER_ADMIN_TOKEN"] = "test-partner-admin-token-that-is-long-enough"
 
 from fastapi.testclient import TestClient
 from backend.app.main import app
@@ -36,6 +37,16 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_online"])
         self.assertEqual(response.json()["vehicle_type"], "Scooter")
+
+    def test_admin_approval_enables_agent_online_state(self):
+        headers = self.login("+919800000106")
+        blocked = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(blocked.status_code, 403)
+        approved = client.post("/api/internal/admin-approval", headers={"Authorization": "Bearer test-partner-admin-token-that-is-long-enough"}, json={"phone": "+919800000106", "status": "approved"})
+        self.assertEqual(approved.status_code, 200, approved.text)
+        online = client.patch("/api/me", headers=headers, json={"is_online": True})
+        self.assertEqual(online.status_code, 200, online.text)
+        self.assertTrue(online.json()["is_verified"])
 
     def test_unapproved_agent_cannot_go_online(self):
         headers = self.login("+919800000103")
