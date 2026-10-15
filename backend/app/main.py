@@ -140,7 +140,7 @@ def agent_payload(agent: Agent):
         "id": agent.id, "phone": agent.phone, "full_name": agent.full_name,
         "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number, "city": agent.city,
         "is_online": agent.is_online, "is_verified": agent.is_verified,
-        "created_at": agent.created_at.isoformat() + "Z",
+        "created_at": (agent.created_at or datetime.utcnow()).isoformat() + "Z",
     }
 
 
