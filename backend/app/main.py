@@ -282,7 +282,7 @@ def admin_approval(payload: AdminApprovalIn, authorization: str | None = Header(
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
     if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Partner approval authentication failed.")
-    digits = re.sub(r"\\D", "", payload.phone)
+    digits = re.sub(r"\D", "", payload.phone)
     phone = "+91" + digits[-10:] if len(digits) >= 10 and (len(digits) == 10 or digits.startswith("91")) else re.sub(r"[^0-9+]", "", payload.phone)
     agent = db.scalar(select(Agent).where(Agent.phone == phone))
     if agent is None:
