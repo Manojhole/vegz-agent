@@ -65,6 +65,9 @@ class DeliveryOrder(Base):
     payment_status: Mapped[str] = mapped_column(String(24), default="pending")
     status: Mapped[str] = mapped_column(String(32), default="assigned", index=True)
     decline_reason: Mapped[str] = mapped_column(String(200), default="")
+    failure_reason: Mapped[str] = mapped_column(String(300), default="")
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0)
     pickup_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
     pickup_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
     delivery_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
@@ -86,6 +89,12 @@ with engine.begin() as connection:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_progress INTEGER NOT NULL DEFAULT 0"))
     if "delivery_city" not in columns:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN delivery_city VARCHAR(100) NOT NULL DEFAULT 'Hubli'"))
+    if "failure_reason" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN failure_reason VARCHAR(300) NOT NULL DEFAULT ''"))
+    if "failed_at" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN failed_at DATETIME"))
+    if "delivery_attempts" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"))
     agent_columns = {column["name"] for column in __import__("sqlalchemy").inspect(engine).get_columns("agents")}
     if "city" not in agent_columns:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE agents ADD COLUMN city VARCHAR(100) NOT NULL DEFAULT 'Hubli'"))
@@ -153,6 +162,8 @@ def order_payload(o: DeliveryOrder):
         "item_summary": o.item_summary, "total_amount": float(o.total_amount or 0),
         "delivery_fee": float(o.delivery_fee or 0), "payment_method": o.payment_method,
         "payment_status": o.payment_status, "status": o.status, "decline_reason": o.decline_reason,
+        "failure_reason": o.failure_reason, "failed_at": o.failed_at.isoformat() + "Z" if o.failed_at else None,
+        "delivery_attempts": o.delivery_attempts,
         "proof_note": o.proof_note, "assigned_at": o.assigned_at.isoformat() + "Z",
         "accepted_at": o.accepted_at.isoformat() + "Z" if o.accepted_at else None,
         "picked_up_at": o.picked_up_at.isoformat() + "Z" if o.picked_up_at else None,
@@ -355,9 +366,10 @@ def order_action(order_id: int, payload: OrderAction, agent: Agent = Depends(cur
         "assigned": {"accept", "decline"},
         "accepted": {"arrived_at_pickup", "cancel_assignment"},
         "arrived_at_pickup": {"picked_up", "cancel_assignment"},
-        "picked_up": {"arrived_at_customer"},
-        "arrived_at_customer": {"delivered"},
+        "picked_up": {"arrived_at_customer", "delivery_failed"},
+        "arrived_at_customer": {"delivered", "delivery_failed"},
         "delivered": set(),
+        "delivery_failed": set(),
         "declined": set(),
         "cancelled": set(),
     }
@@ -387,6 +399,15 @@ def order_action(order_id: int, payload: OrderAction, agent: Agent = Depends(cur
             order.picked_up_at = now
     elif action == "arrived_at_customer":
         order.status = "arrived_at_customer"
+    elif action == "delivery_failed":
+        if not payload.reason.strip():
+            raise HTTPException(status_code=422, detail="Please provide a reason for the failed delivery.")
+        order.status = "delivery_failed"
+        order.failure_reason = payload.reason.strip()
+        order.failed_at = now
+        order.delivery_attempts = (order.delivery_attempts or 0) + 1
+        # Release the assignment so dispatch can safely reassign the order.
+        order.agent_id = None
     elif action == "delivered":
         if not payload.proof_note.strip():
             raise HTTPException(status_code=422, detail="Add a delivery confirmation note before completing delivery.")
