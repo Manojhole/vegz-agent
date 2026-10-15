@@ -11,8 +11,8 @@ async function api(path,options={}){
  const data=await response.json().catch(()=>({}));if(!response.ok){if(response.status===401&&state.token)signOut(false);throw new Error(data.detail||"Request failed. Please try again.")}return data;
 }
 function setBusy(button,busy,label="Saving…"){if(!button)return;if(busy){button.dataset.original=button.textContent;button.disabled=true;button.textContent=label}else{button.disabled=false;button.textContent=button.dataset.original||"Save"}}
-async function signIn(phone,code,name){
- const result=await api("/api/auth/demo-login",{method:"POST",body:JSON.stringify({phone,code,full_name:name})});
+async function signIn(phone,code,name,city){
+ const result=await api("/api/auth/demo-login",{method:"POST",body:JSON.stringify({phone,code,full_name:name,city})});
  state.token=result.access_token;localStorage.setItem("vegzAgentToken",state.token);state.agent=result.agent;
  $("#login-screen").classList.add("hidden");$("#app-shell").classList.remove("hidden");await refreshAll();showView("overview");
 }
@@ -22,7 +22,7 @@ function activeOrders(){return state.orders.filter(o=>!["delivered","declined","
 function completedOrders(){return state.orders.filter(o=>["delivered","declined","cancelled"].includes(o.status))}
 function renderAll(){
  if(!state.agent)return;const a=state.agent,orders=state.orders,active=activeOrders(),done=orders.filter(o=>o.status==="delivered"&&o.delivered_at&&o.delivered_at.slice(0,10)===new Date().toISOString().slice(0,10));
- $("#sidebar-agent-name").textContent=a.full_name;$("#top-agent-name").textContent=a.full_name;$("#profile-name").value=a.full_name;$("#profile-phone").value=a.phone;$("#vehicle-type").value=a.vehicle_type||"Bike";$("#vehicle-number").value=a.vehicle_number||"";
+ $("#sidebar-agent-name").textContent=a.full_name;$("#top-agent-name").textContent=a.full_name;$("#profile-name").value=a.full_name;$("#profile-phone").value=a.phone;$("#vehicle-type").value=a.vehicle_type||"Bike";$("#vehicle-number").value=a.vehicle_number||"";$("#profile-city").value=a.city||"Hubli";
  $("#online-toggle").checked=a.is_online;$("#profile-online-toggle").checked=a.is_online;$("#online-label").textContent=a.is_online?"You're online":"You're offline";$("#sidebar-online-dot").classList.toggle("active",a.is_online);
  $("#stat-active").textContent=active.length;$("#stat-delivered").textContent=done.length;$("#stat-fees").textContent=money(done.reduce((s,o)=>s+Number(o.delivery_fee||0),0));$("#stat-online").textContent=a.is_online?"Online":"Offline";$("#stat-online-foot").textContent=a.is_online?"You're available for assignments":"Switch online when you're ready";$("#nav-active-count").textContent=active.length;$("#verified-pill").textContent=a.is_verified?"Verified":"Pending";$("#profile-status-note").textContent=a.is_online?"You are online. Your dispatch team can assign new deliveries.":"You are offline. You may not receive new assignments.";
  const upcoming=active.slice(0,3);$("#overview-orders").innerHTML=upcoming.map(o=>renderOrder(o,true)).join("")||emptyInline("You're all caught up","New assigned deliveries will appear here.");renderDeliveries();renderHistory();
@@ -97,7 +97,7 @@ async function setOnline(value,input){
  input.disabled=true;try{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify({is_online:value})});renderAll();toast(value?"You're online and available.":"You're now offline.");}
  catch(e){input.checked=!value;toast(e.message,true)}finally{input.disabled=false}
 }
-$("#login-form").addEventListener("submit",async e=>{e.preventDefault();const btn=e.submitter;setBusy(btn,true,"Signing in…");try{await signIn($("#agent-phone").value.trim(),$("#agent-code").value.trim(),$("#agent-name").value.trim());toast("Welcome to Vegz Agent.")}catch(err){toast(err.message,true)}finally{setBusy(btn,false)}});
+$("#login-form").addEventListener("submit",async e=>{e.preventDefault();const btn=e.submitter;setBusy(btn,true,"Signing in…");try{await signIn($("#agent-phone").value.trim(),$("#agent-code").value.trim(),$("#agent-name").value.trim(),$("#agent-city").value);toast("Welcome to Vegz Agent.")}catch(err){toast(err.message,true)}finally{setBusy(btn,false)}});
 $("#logout-btn").addEventListener("click",()=>signOut());
 $("#refresh-btn").addEventListener("click",async()=>{try{await refreshAll();toast("Delivery data refreshed.")}catch(e){toast(e.message,true)}});
 $("#nav").addEventListener("click",e=>{const button=e.target.closest("[data-view]");if(button)showView(button.dataset.view)});
@@ -108,7 +108,7 @@ document.body.addEventListener("click",async e=>{
 });
 $("#online-toggle").addEventListener("change",e=>setOnline(e.target.checked,e.target));
 $("#profile-online-toggle").addEventListener("change",e=>{const desired=e.target.checked;$("#online-toggle").checked=desired;setOnline(desired,e.target)});
-$("#profile-form").addEventListener("submit",e=>{e.preventDefault();const payload={full_name:$("#profile-name").value.trim(),vehicle_type:$("#vehicle-type").value,vehicle_number:$("#vehicle-number").value.trim()};withButton(e.submitter,async()=>{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify(payload)});renderAll();toast("Partner profile saved.")})});
+$("#profile-form").addEventListener("submit",e=>{e.preventDefault();const payload={full_name:$("#profile-name").value.trim(),vehicle_type:$("#vehicle-type").value,vehicle_number:$("#vehicle-number").value.trim(),city:$("#profile-city").value};withButton(e.submitter,async()=>{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify(payload)});renderAll();toast("Partner profile saved.")})});
 $("#delivery-search").addEventListener("input",renderDeliveries);$("#delivery-filter").addEventListener("change",renderDeliveries);
 $("#seed-btn").addEventListener("click",async()=>{await withButton($("#seed-btn"),async()=>{const result=await api("/api/dev/seed",{method:"POST"});await refreshAll();$("#delivery-filter").value="active";renderDeliveries();toast(result.message)})});
 $("#close-action-dialog").addEventListener("click",()=>$("#action-dialog").close());$("#cancel-action").addEventListener("click",()=>$("#action-dialog").close());

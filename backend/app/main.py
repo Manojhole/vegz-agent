@@ -8,11 +8,11 @@ from pathlib import Path
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, create_engine, select, desc
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, create_engine, select, desc, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 load_dotenv()
@@ -37,6 +37,7 @@ class Agent(Base):
     full_name: Mapped[str] = mapped_column(String(120), default="Delivery Partner")
     vehicle_type: Mapped[str] = mapped_column(String(30), default="Bike")
     vehicle_number: Mapped[str] = mapped_column(String(20), default="")
+    city: Mapped[str] = mapped_column(String(100), default="Hubli", index=True)
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -55,6 +56,7 @@ class DeliveryOrder(Base):
     customer_name: Mapped[str] = mapped_column(String(120), default="Vegz customer")
     customer_phone: Mapped[str] = mapped_column(String(20), default="")
     delivery_address: Mapped[str] = mapped_column(String(500), default="")
+    delivery_city: Mapped[str] = mapped_column(String(100), default="Hubli", index=True)
     delivery_instructions: Mapped[str] = mapped_column(String(300), default="")
     item_summary: Mapped[str] = mapped_column(Text, default="")
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
@@ -82,6 +84,11 @@ with engine.begin() as connection:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_stops TEXT NOT NULL DEFAULT '[]'"))
     if "pickup_progress" not in columns:
         connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN pickup_progress INTEGER NOT NULL DEFAULT 0"))
+    if "delivery_city" not in columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE delivery_orders ADD COLUMN delivery_city VARCHAR(100) NOT NULL DEFAULT 'Hubli'"))
+    agent_columns = {column["name"] for column in __import__("sqlalchemy").inspect(engine).get_columns("agents")}
+    if "city" not in agent_columns:
+        connection.execute(__import__("sqlalchemy").text("ALTER TABLE agents ADD COLUMN city VARCHAR(100) NOT NULL DEFAULT 'Hubli'"))
 
 app = FastAPI(title="Vegz Agent API", version="1.0.0", description="Delivery agent operations, availability and order progress.")
 app.add_middleware(
@@ -105,12 +112,14 @@ class DemoLogin(BaseModel):
     phone: str = Field(min_length=8, max_length=20)
     code: str = Field(min_length=4, max_length=10)
     full_name: str = Field(default="Delivery Partner", min_length=2, max_length=120)
+    city: str = Field(default="Hubli", min_length=2, max_length=100)
 
 
 class AgentProfilePatch(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
     vehicle_type: str | None = Field(default=None, max_length=30)
     vehicle_number: str | None = Field(default=None, max_length=20)
+    city: str | None = Field(default=None, min_length=2, max_length=100)
     is_online: bool | None = None
 
 
@@ -129,9 +138,9 @@ class LocationUpdate(BaseModel):
 def agent_payload(agent: Agent):
     return {
         "id": agent.id, "phone": agent.phone, "full_name": agent.full_name,
-        "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number,
+        "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number, "city": agent.city,
         "is_online": agent.is_online, "is_verified": agent.is_verified,
-        "created_at": agent.created_at.isoformat() + "Z",
+        "created_at": (agent.created_at or datetime.utcnow()).isoformat() + "Z",
     }
 
 
@@ -140,7 +149,7 @@ def order_payload(o: DeliveryOrder):
         "id": o.id, "code": o.public_code, "shop_name": o.shop_name, "shop_phone": o.shop_phone,
         "pickup_stops": json.loads(o.pickup_stops or "[]"), "pickup_progress": o.pickup_progress,
         "pickup_address": o.pickup_address, "customer_name": o.customer_name, "customer_phone": o.customer_phone,
-        "delivery_address": o.delivery_address, "delivery_instructions": o.delivery_instructions,
+        "delivery_address": o.delivery_address, "delivery_city": o.delivery_city, "delivery_instructions": o.delivery_instructions,
         "item_summary": o.item_summary, "total_amount": float(o.total_amount or 0),
         "delivery_fee": float(o.delivery_fee or 0), "payment_method": o.payment_method,
         "payment_status": o.payment_status, "status": o.status, "decline_reason": o.decline_reason,
@@ -185,19 +194,21 @@ class InternalDispatch(BaseModel):
     delivery_fee: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     payment_method: str = Field(default="cod", max_length=24)
     payment_status: str = Field(default="pending", max_length=24)
+    delivery_city: str = Field(default="Hubli", min_length=2, max_length=100)
 
 
 @app.get("/api/internal/availability")
-def internal_dispatch_availability(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+def internal_dispatch_availability(city: str = Query(default="Hubli", min_length=2, max_length=100), authorization: str | None = Header(default=None), db: Session = Depends(get_db)): 
     expected = os.getenv("DISPATCH_SHARED_SECRET", "")
     supplied = authorization.split(" ", 1)[1].strip() if authorization and authorization.lower().startswith("bearer ") else ""
     if len(expected) < 32 or "replace-with" in expected.lower() or not secrets.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
-    query = select(Agent).where(Agent.is_online.is_(True))
+    normalized_city = " ".join(city.split()).casefold()
+    query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == normalized_city)
     if APP_ENV == "production":
         query = query.where(Agent.is_verified.is_(True))
     agent = db.scalar(query.order_by(Agent.created_at))
-    return {"available": agent is not None}
+    return {"available": agent is not None, "city": " ".join(city.split()).title()}
 
 
 @app.post("/api/internal/dispatch", status_code=201)
@@ -216,7 +227,8 @@ def create_dispatch(
         return order_payload(existing_order)
     stops = [stop.model_dump() for stop in payload.pickup_stops]
     primary = stops[0]
-    agent_query = select(Agent).where(Agent.is_online.is_(True))
+    delivery_city = " ".join(payload.delivery_city.split()).title()
+    agent_query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == delivery_city.casefold())
     if APP_ENV == "production":
         agent_query = agent_query.where(Agent.is_verified.is_(True))
     agent = db.scalar(agent_query.order_by(Agent.created_at))
@@ -232,6 +244,7 @@ def create_dispatch(
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
         delivery_address=payload.delivery_address,
+        delivery_city=delivery_city,
         delivery_instructions=payload.delivery_instructions,
         item_summary="; ".join(f'{stop["shop_name"]}: {stop["item_summary"]}' for stop in stops),
         total_amount=payload.total_amount,
@@ -263,11 +276,15 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
     if payload.code != os.getenv("AGENT_DEMO_CODE", "123456"):
         raise HTTPException(status_code=400, detail="Invalid development access code.")
     agent = db.scalar(select(Agent).where(Agent.phone == phone))
+    city = " ".join(payload.city.split()).title()
     if agent is None:
-        agent = Agent(phone=phone, full_name=payload.full_name, is_verified=False)
+        agent = Agent(phone=phone, full_name=payload.full_name, city=city, is_verified=False)
         db.add(agent)
-        db.commit()
-        db.refresh(agent)
+    else:
+        agent.full_name = payload.full_name
+        agent.city = city
+    db.commit()
+    db.refresh(agent)
     token = jwt.encode({"agent_id": agent.id, "exp": datetime.utcnow() + timedelta(days=7)}, JWT_SECRET, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer", "agent": agent_payload(agent)}
 
@@ -279,7 +296,12 @@ def get_me(agent: Agent = Depends(current_agent)):
 
 @app.patch("/api/me")
 def update_me(payload: AgentProfilePatch, agent: Agent = Depends(current_agent), db: Session = Depends(get_db)):
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("city"):
+        changes["city"] = " ".join(changes["city"].split()).title()
+    if changes.get("city") and changes["city"] != agent.city and changes.get("is_online", agent.is_online):
+        raise HTTPException(status_code=409, detail="Go offline before changing your delivery city.")
+    for key, value in changes.items():
         setattr(agent, key, value)
     db.commit()
     db.refresh(agent)
