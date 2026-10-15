@@ -99,5 +99,18 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
 
+    def test_mobile_registration_is_sent_to_admin_review_queue(self):
+        from unittest.mock import Mock, patch
+        with patch("backend.app.main.ADMIN_SERVICE_URL", "http://admin.test"), patch("backend.app.main.httpx.post", return_value=Mock(raise_for_status=Mock())) as callback:
+            response = client.post("/api/auth/demo-login", json={
+                "phone": "9876543215", "code": "123456", "full_name": "New Partner", "city": "Hubli"
+            })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertFalse(response.json()["agent"]["is_verified"])
+        args, kwargs = callback.call_args
+        self.assertEqual(args[0], "http://admin.test/api/internal/partner-requests/agent")
+        self.assertEqual(kwargs["json"]["phone"], "+919876543215")
+        self.assertEqual(kwargs["json"]["city"], "Hubli")
+
 if __name__ == "__main__":
     unittest.main()
