@@ -340,9 +340,8 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
                 "vehicle_type": agent.vehicle_type, "vehicle_number": agent.vehicle_number, "external_ref": str(agent.id)
             }, timeout=5.0)
             response.raise_for_status()
-        except httpx.HTTPError:
-            if APP_ENV == "production":
-                raise HTTPException(status_code=503, detail="Could not submit delivery partner registration for admin review.")
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=503, detail="Could not submit delivery partner registration for admin review. Check the Vegz Admin service and shared partner token.") from exc
     token = jwt.encode({"agent_id": agent.id, "exp": datetime.utcnow() + timedelta(days=7)}, JWT_SECRET, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer", "agent": agent_payload(agent)}
 
