@@ -18,7 +18,7 @@ async function signIn(phone,code,name,city){
 }
 function signOut(show=true){state.token="";state.agent=null;localStorage.removeItem("vegzAgentToken");$("#app-shell").classList.add("hidden");$("#login-screen").classList.remove("hidden");if(show)toast("You have signed out.")}
 async function refreshAll(){const [agent,orders]=await Promise.all([api("/api/me"),api("/api/orders")]);state.agent=agent;state.orders=orders;renderAll()}
-function activeOrders(){return state.orders.filter(o=>!["delivered","declined","cancelled"].includes(o.status))}
+function activeOrders(){return state.orders.filter(o=>!["delivered","declined","cancelled","delivery_failed"].includes(o.status))}
 function completedOrders(){return state.orders.filter(o=>["delivered","declined","cancelled"].includes(o.status))}
 function renderAll(){
  if(!state.agent)return;const a=state.agent,orders=state.orders,active=activeOrders(),done=orders.filter(o=>o.status==="delivered"&&o.delivered_at&&o.delivered_at.slice(0,10)===new Date().toISOString().slice(0,10));
@@ -35,9 +35,9 @@ function orderActions(order,compact=false){
  assigned:[["accept","Accept delivery","primary"],["decline","Decline","danger"]],
  accepted:[["arrived_at_pickup","Arrived at shop","primary"],["cancel_assignment","Return assignment","danger"]],
  arrived_at_pickup:[["picked_up","Confirm pickup","primary"]],
- picked_up:[["arrived_at_customer","Arrived at customer","primary"]],
- arrived_at_customer:[["delivered","Complete delivery","primary"]],
- delivered:[],declined:[],cancelled:[]
+ picked_up:[["arrived_at_customer","Arrived at customer","primary"],["delivery_failed","Report delivery failure","danger"]],
+ arrived_at_customer:[["delivered","Complete delivery","primary"],["delivery_failed","Report delivery failure","danger"]],
+ delivered:[],delivery_failed:[],declined:[],cancelled:[]
  };
  return (definitions[order.status]||[]).map(([action,label,kind])=>`<button class="btn ${kind==="danger"?"danger":"primary"} ${compact?"small":""}" data-action="${action}" data-order-id="${order.id}">${label}</button>`).join("");
 }
@@ -78,6 +78,7 @@ const actionMeta={
  picked_up:{title:"Confirm order pickup",description:"Check the items and order code with the shop before confirming pickup.",label:"Pickup confirmation note (optional)",placeholder:"e.g. Items checked, package sealed",required:false},
  arrived_at_customer:{title:"Arrived at customer",description:"Confirm you have reached the delivery address.",label:"Arrival note (optional)",placeholder:"e.g. Called customer on arrival",required:false},
  delivered:{title:"Complete delivery",description:"Add a confirmation note before closing this delivery.",label:"Delivery confirmation *",placeholder:"e.g. Handed to customer at front door",required:true},
+ delivery_failed:{title:"Report delivery failure",description:"Explain what prevented delivery. Dispatch can review and reassign the order.",label:"Failure reason *",placeholder:"e.g. Customer unavailable after calling",required:true},
  cancel_assignment:{title:"Return assignment",description:"Explain why this assignment must be returned to dispatch.",label:"Reason for return *",placeholder:"e.g. Vehicle breakdown, safety issue",required:true}
 };
 function openAction(orderId,action){
@@ -87,8 +88,8 @@ function openAction(orderId,action){
  $("#action-order-id").value=orderId;$("#action-name").value=action;$("#action-title").textContent=meta.title;$("#action-description").textContent=meta.description;$("#action-note-label").textContent=meta.label;$("#action-note").placeholder=meta.placeholder;$("#action-note").value="";$("#action-note").required=meta.required;
  $("#action-dialog").showModal();
 }
-async function submitAction(orderId,action,note,button){
- const reason=["decline","cancel_assignment"].includes(action)?note:"";
+async async function submitAction(orderId,action,note,button){
+ const reason=["decline","cancel_assignment","delivery_failed"].includes(action)?note:"";
  const proof_note=action==="delivered"?note:"";
  await withButton(button,async()=>{await api(`/api/orders/${orderId}/action`,{method:"PATCH",body:JSON.stringify({action,reason,proof_note})});$("#action-dialog").close();await refreshAll();toast(({accept:"Delivery accepted.",decline:"Assignment declined and removed from your queue.",arrived_at_pickup:"Pickup arrival recorded.",picked_up:"Pickup confirmed. Ride safely.",arrived_at_customer:"Customer arrival recorded.",delivered:"Delivery marked complete.",cancel_assignment:"Assignment returned to dispatch."})[action]||"Delivery updated.");});
 }
