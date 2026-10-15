@@ -308,6 +308,8 @@ def get_me(agent: Agent = Depends(current_agent)):
 @app.patch("/api/me")
 def update_me(payload: AgentProfilePatch, agent: Agent = Depends(current_agent), db: Session = Depends(get_db)):
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("is_online") is True and not agent.is_verified:
+        raise HTTPException(status_code=403, detail="Your delivery partner application is awaiting admin approval. You can go online after approval.")
     if changes.get("city"):
         changes["city"] = " ".join(changes["city"].split()).title()
     if changes.get("city") and changes["city"] != agent.city and changes.get("is_online", agent.is_online):
