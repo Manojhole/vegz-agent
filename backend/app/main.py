@@ -217,8 +217,7 @@ def internal_dispatch_availability(city: str = Query(default="Hubli", min_length
         raise HTTPException(status_code=401, detail="Internal dispatch authentication failed.")
     normalized_city = " ".join(city.split()).casefold()
     query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == normalized_city)
-    if APP_ENV == "production":
-        query = query.where(Agent.is_verified.is_(True))
+    query = query.where(Agent.is_verified.is_(True))
     agent = db.scalar(query.order_by(Agent.created_at))
     return {"available": agent is not None, "city": " ".join(city.split()).title()}
 
@@ -241,8 +240,7 @@ def create_dispatch(
     primary = stops[0]
     delivery_city = " ".join(payload.delivery_city.split()).title()
     agent_query = select(Agent).where(Agent.is_online.is_(True), func.lower(Agent.city) == delivery_city.casefold())
-    if APP_ENV == "production":
-        agent_query = agent_query.where(Agent.is_verified.is_(True))
+    agent_query = agent_query.where(Agent.is_verified.is_(True))
     agent = db.scalar(agent_query.order_by(Agent.created_at))
     if agent is None:
         raise HTTPException(status_code=409, detail="No eligible agent is currently online. Ask an agent to go online and retry.")
