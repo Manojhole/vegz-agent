@@ -9,6 +9,7 @@ os.environ["APP_ENV"] = "development"
 os.environ["JWT_SECRET"] = "test-secret-with-sufficient-length-for-tests"
 os.environ["AGENT_DEMO_CODE"] = "123456"
 os.environ["PARTNER_ADMIN_TOKEN"] = "test-partner-admin-token-that-is-long-enough"
+os.environ["ADMIN_SERVICE_URL"] = ""
 
 from fastapi.testclient import TestClient
 from backend.app.main import app
