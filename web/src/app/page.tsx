@@ -1,11 +1,23 @@
-const portal = "agent";
-const titles: Record<string, string> = {
-  user: "Fresh groceries, delivered simply.",
-  shop: "Your store, in control.",
-  agent: "Every delivery, one clear route.",
-  admin: "Vegz platform operations.",
-};
+const API_ORIGIN = (process.env.NEXT_PUBLIC_VEGZ_AGENT_API_URL || "http://localhost:8001").replace(/\/$/, "");
 
-export default function HomePage() {
-  return <main className="shell"><header><span className="mark">V</span><strong>vegz<span>.</span></strong><span className="portal">{portal} portal</span></header><section className="hero"><p className="eyebrow">THE VEGZ PLATFORM</p><h1>{titles[portal]}</h1><p className="intro">A modern, responsive portal built with Next.js and TypeScript, connected to Vegz FastAPI services.</p><div className="status"><span className="dot" /> Web foundation ready <span className="tag">Next.js · TypeScript</span></div><p className="note">Migration foundation only: existing workflows remain in the current app until their API-backed screens are ported and tested.</p></section><footer>Vegz · Fresh choices. Smarter delivery.</footer></main>;
+export default function AgentHomePage() {
+  return (
+    <main className="portal-shell">
+      <header className="portal-header">
+        <a className="brand" href="/" aria-label="Vegz delivery home"><span className="brand-mark">V</span><span>vegz<span className="period">.</span></span></a>
+        <span className="portal-label">DELIVERY PARTNER</span>
+        <a className="open-link" href={API_ORIGIN} target="_blank" rel="noreferrer">Open dashboard separately ↗</a>
+      </header>
+      <section className="portal-intro">
+        <p className="eyebrow">EVERY STOP COUNTS</p>
+        <h1>Deliver with care.<br /><span>Keep every order moving.</span></h1>
+        <p>Assigned jobs, multi-shop pickup progress and delivery status are provided by the existing FastAPI agent service while its web interface is migrated into Next.js.</p>
+      </section>
+      <section className="live-portal">
+        <div className="portal-bar"><span className="live-dot" /> <strong>Live delivery workspace</strong><span className="portal-origin">{API_ORIGIN}</span></div>
+        <iframe title="Vegz Agent dashboard" src={API_ORIGIN} loading="eager" />
+      </section>
+      <footer>Vegz Agent · Native Android client runs on the same delivery APIs.</footer>
+    </main>
+  );
 }
