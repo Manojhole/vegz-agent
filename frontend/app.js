@@ -8,7 +8,7 @@ function toast(message,error=false){const el=$("#toast");el.textContent=message;
 async function api(path,options={}){
  const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization="Bearer "+state.token;
  let response;try{response=await fetch(path,{...options,headers})}catch{throw new Error("Cannot reach the Vegz Agent API. Check that the server is running.")}
- const data=await response.json().catch(()=>({}));if(!response.ok){if(response.status===401&&state.token)signOut(false);throw new Error(data.detail||"Request failed. Please try again.")}return data;
+ const data=await response.json().catch(()=>({}));if(!response.ok){if(response.status===401&&state.token)signOut(false);throw new Error(typeof data.detail === "string" ? data.detail : Array.isArray(data.detail) ? data.detail.map(x=>x.msg||String(x)).join("; ") : "Request failed. Please try again.")}return data;
 }
 function setBusy(button,busy,label="Saving…"){if(!button)return;if(busy){button.dataset.original=button.textContent;button.disabled=true;button.textContent=label}else{button.disabled=false;button.textContent=button.dataset.original||"Save"}}
 async function signIn(phone,code,name,city){
@@ -112,7 +112,7 @@ document.body.addEventListener("click",async e=>{
 });
 $("#online-toggle").addEventListener("change",e=>setOnline(e.target.checked,e.target));
 $("#profile-online-toggle").addEventListener("change",e=>{const desired=e.target.checked;$("#online-toggle").checked=desired;setOnline(desired,e.target)});
-$("#profile-form").addEventListener("submit",e=>{e.preventDefault();const payload={full_name:$("#profile-name").value.trim(),vehicle_type:$("#vehicle-type").value,vehicle_number:$("#vehicle-number").value.trim(),city:$("#profile-city").value};withButton(e.submitter,async()=>{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify(payload)});renderAll();toast("Partner profile saved.")})});
+$("#profile-form").addEventListener("submit",e=>{e.preventDefault();const payload={full_name:$("#profile-name").value.trim(),vehicle_type:$("#vehicle-type").value,vehicle_number:$("#vehicle-number").value.trim()};withButton(e.submitter,async()=>{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify(payload)});renderAll();toast("Partner profile saved.")})});
 $("#delivery-search").addEventListener("input",renderDeliveries);$("#delivery-filter").addEventListener("change",renderDeliveries);
 $("#seed-btn").addEventListener("click",async()=>{await withButton($("#seed-btn"),async()=>{const result=await api("/api/dev/seed",{method:"POST"});await refreshAll();$("#delivery-filter").value="active";renderDeliveries();toast(result.message)})});
 $("#close-action-dialog").addEventListener("click",()=>$("#action-dialog").close());$("#cancel-action").addEventListener("click",()=>$("#action-dialog").close());
