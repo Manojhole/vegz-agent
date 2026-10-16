@@ -28,7 +28,7 @@ npm install
 NEXT_PUBLIC_VEGZ_AGENT_API_URL=http://localhost:8001 npm run dev
 ```
 
-Open `http://localhost:3000`. The Next.js entry screen currently embeds the existing API-backed agent web workflow while migration to native Next components continues. Legacy FastAPI-served portal is still available from the API on port 8001.
+Open `http://localhost:3000`. The Next.js delivery workspace now calls the FastAPI agent API for sign-in, online/offline state, multi-shop pickup sequence and delivery status/proof notes. The legacy FastAPI-served portal remains available on port 8001 for workflows not yet migrated.
 
 ## Run the Expo app
 
