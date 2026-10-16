@@ -13,7 +13,7 @@
     <p class="muted">Your daily route, assigned orders and delivery progress — all in one place.</p>
     <form id="login-form"><label for="agent-name">Your name</label><input id="agent-name" required minlength="2" maxlength="120" placeholder="Enter your name" value="Delivery Partner">
       <label for="agent-phone">Mobile number</label><input id="agent-phone" type="tel" autocomplete="tel" required minlength="8" placeholder="+91 98765 43210">
-      <label for="agent-city">Delivery city</label><select id="agent-city" required><option value="Hubli">Hubli</option><option value="Dharwad">Dharwad</option></select>
+      <div id="registration-city-field"><label for="agent-city">Delivery city (registration only)</label><select id="agent-city" required><option value="Hubli">Hubli</option><option value="Dharwad">Dharwad</option></select><p class="hint">Your city is saved with your first registration and cannot be changed by signing in again.</p></div>
       <label for="agent-code">Development access code</label><input id="agent-code" required value="123456" inputmode="numeric" placeholder="Enter demo code">
       <button class="btn primary full" type="submit">Open agent app <span>↗</span></button></form>
     <p class="hint">Development sign-in only. Real agent accounts require verified OTP and admin approval before launch.</p>
