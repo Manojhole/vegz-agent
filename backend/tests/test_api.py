@@ -84,6 +84,8 @@ class AgentApiTests(unittest.TestCase):
         headers = self.login("+919800000121", "Multi Stop Agent")
         from backend.app.main import Agent, SessionLocal
         with SessionLocal() as db:
+            for existing in db.query(Agent).all():
+                existing.is_online = False
             agent = db.query(Agent).filter_by(phone="+919800000121").first()
             agent.is_verified = True
             agent.is_online = True
