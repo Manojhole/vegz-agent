@@ -134,7 +134,6 @@ class AgentProfilePatch(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
     vehicle_type: str | None = Field(default=None, max_length=30)
     vehicle_number: str | None = Field(default=None, max_length=20)
-    city: str | None = Field(default=None, min_length=2, max_length=100)
     is_online: bool | None = None
 
 
@@ -327,8 +326,8 @@ def demo_login(payload: DemoLogin, db: Session = Depends(get_db)):
         agent = Agent(phone=phone, full_name=payload.full_name, city=city, is_verified=False)
         db.add(agent)
     else:
+        # City is selected at first registration and must not change on later sign-ins.
         agent.full_name = payload.full_name
-        agent.city = city
     db.commit()
     db.refresh(agent)
     admin_url = ADMIN_SERVICE_URL
@@ -356,10 +355,6 @@ def update_me(payload: AgentProfilePatch, agent: Agent = Depends(current_agent),
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("is_online") is True and not agent.is_verified:
         raise HTTPException(status_code=403, detail="Your delivery partner application is awaiting admin approval. You can go online after approval.")
-    if changes.get("city"):
-        changes["city"] = " ".join(changes["city"].split()).title()
-    if changes.get("city") and changes["city"] != agent.city and changes.get("is_online", agent.is_online):
-        raise HTTPException(status_code=409, detail="Go offline before changing your delivery city.")
     for key, value in changes.items():
         setattr(agent, key, value)
     db.commit()
