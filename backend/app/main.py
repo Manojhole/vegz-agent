@@ -23,6 +23,37 @@ JWT_SECRET = os.getenv("JWT_SECRET", "local-dev-only-change-this-secret")
 PARTNER_ADMIN_TOKEN = os.getenv("PARTNER_ADMIN_TOKEN", "vegz-local-partner-token-change-before-production")
 DISPATCH_SHARED_SECRET = os.getenv("DISPATCH_SHARED_SECRET", "vegz-local-agent-dispatch-token-change-before-production" if APP_ENV == "development" else "")
 ADMIN_SERVICE_URL = os.getenv("ADMIN_SERVICE_URL", "http://host.docker.internal:8000" if APP_ENV == "development" else "").rstrip("/")
+
+
+
+def _sync_admin_order(order: "DeliveryOrder") -> None:
+    """Best-effort delivery lifecycle sync to the operations console."""
+    if not ADMIN_SERVICE_URL or len(PARTNER_ADMIN_TOKEN) < 32:
+        return
+    try:
+        response = httpx.post(
+            ADMIN_SERVICE_URL + "/api/internal/order-sync",
+            headers={"Authorization": "Bearer " + PARTNER_ADMIN_TOKEN},
+            json={
+                "public_code": order.public_code,
+                "source": "agent",
+                "external_ref": "vegz-agent:" + str(order.id),
+                "customer_name": order.customer_name,
+                "customer_phone": order.customer_phone,
+                "address": order.delivery_address,
+                "city": order.delivery_city,
+                "total_amount": str(order.total_amount or 0),
+                "payment_status": order.payment_status,
+                "status": order.status,
+            },
+            timeout=4.0,
+        )
+        response.raise_for_status()
+    except (httpx.HTTPError, ValueError) as exc:
+        # Delivery state is persisted locally first; a transient admin outage
+        # must not prevent the agent from completing a delivery.
+        import logging
+        logging.getLogger("vegz.agent").warning("Admin order sync failed (%s).", type(exc).__name__)
 if APP_ENV == "production" and (len(PARTNER_ADMIN_TOKEN) < 32 or "replace-with" in PARTNER_ADMIN_TOKEN.lower() or "change-before-production" in PARTNER_ADMIN_TOKEN or not ADMIN_SERVICE_URL):
     raise RuntimeError("Configure ADMIN_SERVICE_URL and a unique PARTNER_ADMIN_TOKEN before production.")
 engine_kwargs = {"pool_pre_ping": True}
@@ -472,6 +503,7 @@ def order_action(order_id: int, payload: OrderAction, agent: Agent = Depends(cur
     order.updated_at = now
     db.commit()
     db.refresh(order)
+    _sync_admin_order(order)
     return order_payload(order)
 
 
