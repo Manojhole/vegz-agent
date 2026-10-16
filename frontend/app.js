@@ -14,6 +14,7 @@ function setBusy(button,busy,label="Saving…"){if(!button)return;if(busy){butto
 async function signIn(phone,code,name,city){
  const result=await api("/api/auth/demo-login",{method:"POST",body:JSON.stringify({phone,code,full_name:name,city})});
  state.token=result.access_token;localStorage.setItem("vegzAgentToken",state.token);state.agent=result.agent;
+ try { localStorage.setItem("vegzAgentRegistration:"+result.agent.phone, result.agent.city); } catch (_) {}
  $("#login-screen").classList.add("hidden");$("#app-shell").classList.remove("hidden");await refreshAll();showView("overview");
 }
 function signOut(show=true){state.token="";state.agent=null;localStorage.removeItem("vegzAgentToken");$("#app-shell").classList.add("hidden");$("#login-screen").classList.remove("hidden");if(show)toast("You have signed out.")}
@@ -101,7 +102,17 @@ async function setOnline(value,input){
  input.disabled=true;try{state.agent=await api("/api/me",{method:"PATCH",body:JSON.stringify({is_online:value})});renderAll();toast(value?"You're online and available.":"You're now offline.");}
  catch(e){input.checked=!value;toast(e.message,true)}finally{input.disabled=false}
 }
+function syncRegistrationCityField(){
+ const phone=$("#agent-phone").value.replace(/\\D/g,"");
+ let saved="";
+ try { saved=localStorage.getItem("vegzAgentRegistration:+91"+phone)||localStorage.getItem("vegzAgentRegistration:+"+phone)||""; } catch (_) {}
+ const field=$("#registration-city-field");
+ if(saved){ $("#agent-city").value=saved; field.classList.add("hidden"); $("#agent-city").required=false; }
+ else { field.classList.remove("hidden"); $("#agent-city").required=true; }
+}
+$("#agent-phone").addEventListener("input",syncRegistrationCityField);
 $("#login-form").addEventListener("submit",async e=>{e.preventDefault();const btn=e.submitter;setBusy(btn,true,"Signing in…");try{await signIn($("#agent-phone").value.trim(),$("#agent-code").value.trim(),$("#agent-name").value.trim(),$("#agent-city").value);toast("Welcome to Vegz Agent.")}catch(err){toast(err.message,true)}finally{setBusy(btn,false)}});
+syncRegistrationCityField();
 $("#logout-btn").addEventListener("click",()=>signOut());
 $("#refresh-btn").addEventListener("click",async()=>{try{await refreshAll();toast("Delivery data refreshed.")}catch(e){toast(e.message,true)}});
 $("#nav").addEventListener("click",e=>{const button=e.target.closest("[data-view]");if(button)showView(button.dataset.view)});
