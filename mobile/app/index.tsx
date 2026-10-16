@@ -30,9 +30,9 @@ export default function AgentApp() {
 
   const load = useCallback(async (session: string) => {
     const profile = await api<Agent>("/api/me", session);
-    const dashboard = await api<{active_orders: Delivery[]}>("/api/dashboard", session);
+    const assignedOrders = await api<Delivery[]>("/api/orders", session);
     setAgent(profile);
-    setOrders(dashboard.active_orders || []);
+    setOrders(Array.isArray(assignedOrders) ? assignedOrders : []);
   }, []);
 
   useEffect(() => {
