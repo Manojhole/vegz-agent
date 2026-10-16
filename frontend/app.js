@@ -91,7 +91,7 @@ function openAction(orderId,action){
  $("#action-order-id").value=orderId;$("#action-name").value=action;$("#action-title").textContent=meta.title;$("#action-description").textContent=meta.description;$("#action-note-label").textContent=meta.label;$("#action-note").placeholder=meta.placeholder;$("#action-note").value="";$("#action-note").required=meta.required;
  $("#action-dialog").showModal();
 }
-async async function submitAction(orderId,action,note,button){
+async function submitAction(orderId,action,note,button){
  const reason=["decline","cancel_assignment","delivery_failed"].includes(action)?note:"";
  const proof_note=action==="delivered"?note:"";
  await withButton(button,async()=>{await api(`/api/orders/${orderId}/action`,{method:"PATCH",body:JSON.stringify({action,reason,proof_note})});$("#action-dialog").close();await refreshAll();toast(({accept:"Delivery accepted.",decline:"Assignment declined and removed from your queue.",arrived_at_pickup:"Pickup arrival recorded.",picked_up:"Pickup confirmed. Ride safely.",arrived_at_customer:"Customer arrival recorded.",delivered:"Delivery marked complete.",cancel_assignment:"Assignment returned to dispatch."})[action]||"Delivery updated.");});

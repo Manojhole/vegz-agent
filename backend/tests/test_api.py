@@ -10,6 +10,7 @@ os.environ["JWT_SECRET"] = "test-secret-with-sufficient-length-for-tests"
 os.environ["AGENT_DEMO_CODE"] = "123456"
 os.environ["PARTNER_ADMIN_TOKEN"] = "test-partner-admin-token-that-is-long-enough"
 os.environ["ADMIN_SERVICE_URL"] = ""
+os.environ["DISPATCH_SHARED_SECRET"] = "test-dispatch-secret-that-is-long-enough"
 
 from fastapi.testclient import TestClient
 from backend.app.main import app
@@ -75,6 +76,56 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(no_proof.status_code, 422)
         delivered = client.patch(f"/api/orders/{oid}/action", headers=headers, json={
             "action": "delivered", "proof_note": "Handed to customer at front door"
+        })
+        self.assertEqual(delivered.status_code, 200, delivered.text)
+        self.assertEqual(delivered.json()["status"], "delivered")
+
+    def test_multi_shop_dispatch_requires_each_pickup_before_delivery(self):
+        headers = self.login("+919800000121", "Multi Stop Agent")
+        from backend.app.main import Agent, SessionLocal
+        with SessionLocal() as db:
+            for existing in db.query(Agent).all():
+                existing.is_online = False
+            agent = db.query(Agent).filter_by(phone="+919800000121").first()
+            agent.is_verified = True
+            agent.is_online = True
+            db.commit()
+        body = {
+            "public_code": "VGZ-MULTI-STOP-121",
+            "customer_name": "Multi Stop Customer",
+            "customer_phone": "+919800000122",
+            "delivery_address": "12 Test Road, Hubli",
+            "delivery_city": "Hubli",
+            "pickup_stops": [
+                {"shop_name": "Veg Shop", "shop_phone": "+919800000123", "pickup_address": "1 Veg Market", "item_summary": "Tomato x1", "shop_order_id": "veg-1"},
+                {"shop_name": "Grocery Shop", "shop_phone": "+919800000124", "pickup_address": "2 Grocery Street", "item_summary": "Rice x1", "shop_order_id": "grocery-1"}
+            ],
+            "total_amount": "100.00",
+            "delivery_fee": "25.00",
+            "payment_method": "cod",
+            "payment_status": "pending"
+        }
+        dispatched = client.post("/api/internal/dispatch", headers={"Authorization": "Bearer test-dispatch-secret-that-is-long-enough"}, json=body)
+        self.assertEqual(dispatched.status_code, 201, dispatched.text)
+        oid = dispatched.json()["id"]
+        for action in ["accept", "arrived_at_pickup", "picked_up"]:
+            result = client.patch(f"/api/orders/{oid}/action", headers=headers, json={"action": action})
+            self.assertEqual(result.status_code, 200, result.text)
+        first_pickup = client.get(f"/api/orders/{oid}", headers=headers).json()
+        self.assertEqual(first_pickup["status"], "accepted")
+        self.assertEqual(first_pickup["pickup_progress"], 1)
+        self.assertEqual(first_pickup["pickup_stops"][0]["shop_name"], "Veg Shop")
+        for action in ["arrived_at_pickup", "picked_up"]:
+            result = client.patch(f"/api/orders/{oid}/action", headers=headers, json={"action": action})
+            self.assertEqual(result.status_code, 200, result.text)
+        second_pickup = client.get(f"/api/orders/{oid}", headers=headers).json()
+        self.assertEqual(second_pickup["status"], "picked_up")
+        self.assertEqual(second_pickup["pickup_progress"], 1)
+        for action in ["arrived_at_customer"]:
+            result = client.patch(f"/api/orders/{oid}/action", headers=headers, json={"action": action})
+            self.assertEqual(result.status_code, 200, result.text)
+        delivered = client.patch(f"/api/orders/{oid}/action", headers=headers, json={
+            "action": "delivered", "proof_note": "Delivered to customer"
         })
         self.assertEqual(delivered.status_code, 200, delivered.text)
         self.assertEqual(delivered.json()["status"], "delivered")
