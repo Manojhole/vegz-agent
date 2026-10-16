@@ -23,6 +23,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "local-dev-only-change-this-secret")
 PARTNER_ADMIN_TOKEN = os.getenv("PARTNER_ADMIN_TOKEN", "vegz-local-partner-token-change-before-production")
 DISPATCH_SHARED_SECRET = os.getenv("DISPATCH_SHARED_SECRET", "vegz-local-agent-dispatch-token-change-before-production" if APP_ENV == "development" else "")
 ADMIN_SERVICE_URL = os.getenv("ADMIN_SERVICE_URL", "http://host.docker.internal:8000" if APP_ENV == "development" else "").rstrip("/")
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://host.docker.internal:8003" if APP_ENV == "development" else "").rstrip("/")
 
 
 
@@ -54,6 +55,27 @@ def _sync_admin_order(order: "DeliveryOrder") -> None:
         # must not prevent the agent from completing a delivery.
         import logging
         logging.getLogger("vegz.agent").warning("Admin order sync failed (%s).", type(exc).__name__)
+
+
+def _sync_customer_order(order: "DeliveryOrder") -> None:
+    """Push agent progress into the customer-visible order history."""
+    if not USER_SERVICE_URL or len(DISPATCH_SHARED_SECRET) < 32:
+        return
+    try:
+        response = httpx.post(
+            USER_SERVICE_URL + "/api/internal/order-status",
+            headers={"Authorization": "Bearer " + DISPATCH_SHARED_SECRET},
+            json={
+                "tracking_code": order.public_code,
+                "status": order.status,
+                "payment_status": order.payment_status,
+            },
+            timeout=4.0,
+        )
+        response.raise_for_status()
+    except (httpx.HTTPError, ValueError) as exc:
+        import logging
+        logging.getLogger("vegz.agent").warning("Customer order status sync failed (%s).", type(exc).__name__)
 if APP_ENV == "production" and (len(PARTNER_ADMIN_TOKEN) < 32 or "replace-with" in PARTNER_ADMIN_TOKEN.lower() or "change-before-production" in PARTNER_ADMIN_TOKEN or not ADMIN_SERVICE_URL):
     raise RuntimeError("Configure ADMIN_SERVICE_URL and a unique PARTNER_ADMIN_TOKEN before production.")
 engine_kwargs = {"pool_pre_ping": True}
@@ -504,6 +526,7 @@ def order_action(order_id: int, payload: OrderAction, agent: Agent = Depends(cur
     db.commit()
     db.refresh(order)
     _sync_admin_order(order)
+    _sync_customer_order(order)
     return order_payload(order)
 
 
