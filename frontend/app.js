@@ -103,7 +103,7 @@ async function setOnline(value,input){
  catch(e){input.checked=!value;toast(e.message,true)}finally{input.disabled=false}
 }
 function syncRegistrationCityField(){
- const phone=$("#agent-phone").value.replace(/\\D/g,"");
+ const phone=$("#agent-phone").value.replace(/\D/g,"");
  let saved="";
  try { saved=localStorage.getItem("vegzAgentRegistration:+91"+phone)||localStorage.getItem("vegzAgentRegistration:+"+phone)||""; } catch (_) {}
  const field=$("#registration-city-field");
