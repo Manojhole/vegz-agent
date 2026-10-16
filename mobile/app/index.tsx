@@ -127,7 +127,7 @@ export default function AgentApp() {
     {!!error&&<Text style={s.error}>{error}</Text>}
     <View style={s.metrics}><Metric value={String(orders.length)} label="Active deliveries"/><Metric value={String(orders.filter(o=>o.status==="delivered").length)} label="Delivered in view"/><Metric value={agent.is_online?"Online":"Offline"} label="Availability"/></View>
     <View style={s.sectionHead}><Text style={s.heading}>My deliveries</Text><Pressable onPress={refresh}><Text style={s.link}>↻ Refresh</Text></Pressable></View>
-    {orders.length===0&&<View style={s.card}><Text style={s.cardTitle}>No active deliveries</Text><Text style={s.helper}>Assigned orders appear here after dispatch. For local development only, load sample deliveries.</Text><Action label="Load demo deliveries" onPress={seed} disabled={busy}/></View>}
+    {orders.length===0&&<View style={s.card}><Text style={s.customer}>No active deliveries</Text><Text style={s.helper}>Assigned orders appear here after dispatch. For local development only, load sample deliveries.</Text><Action label="Load demo deliveries" onPress={seed} disabled={busy}/></View>}
     {orders.map(order=><View key={order.id} style={s.orderCard}>
       <View style={s.orderHead}><Text style={s.orderCode}>{order.code}</Text><Text style={s.status}>{order.status.replace(/_/g," ")}</Text></View>
       <Text style={s.customer}>{order.customer_name}</Text><Text style={s.muted}>{order.delivery_address}, {order.delivery_city}</Text>
