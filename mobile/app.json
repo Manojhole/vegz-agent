@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Vegz Delivery",
+    "slug": "vegz-agent",
+    "scheme": "vegzagent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router", "expo-secure-store"],
+    "android": { "package": "online.vegz.agent" },
+    "ios": { "bundleIdentifier": "online.vegz.agent" }
+  }
+}
