@@ -50,6 +50,19 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(online.status_code, 200, online.text)
         self.assertTrue(online.json()["is_verified"])
 
+    def test_city_is_fixed_after_registration(self):
+        headers = self.login("+919800000130")
+        before = client.get("/api/me", headers=headers).json()
+        self.assertEqual(before["city"], "Hubli")
+        # A repeated sign-in must not overwrite the registered city.
+        again = client.post("/api/auth/demo-login", json={"phone": "+919800000130", "code": "123456", "full_name": "Test Partner", "city": "Dharwad"})
+        self.assertEqual(again.status_code, 200, again.text)
+        self.assertEqual(again.json()["agent"]["city"], "Hubli")
+        # Profile updates do not expose a city field.
+        changed = client.patch("/api/me", headers=headers, json={"city": "Dharwad"})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertEqual(changed.json()["city"], "Hubli")
+
     def test_unapproved_agent_cannot_go_online(self):
         headers = self.login("+919800000103")
         response = client.patch("/api/me", headers=headers, json={"is_online": True})
