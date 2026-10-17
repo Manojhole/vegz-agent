@@ -8,3 +8,6 @@
 @media(max-width:390px){.profile{display:none}.hero-glyph{font-size:35px}.topbar h1{font-size:22px}.delivery-code strong{font-size:12px}.delivery-head>.status-pill{font-size:9px}}
 
 .route-symbol{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+
+/* Keep a single availability control in the profile workspace. */
+.online-control { display: none !important; }
