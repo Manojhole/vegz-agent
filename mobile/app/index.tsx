@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 const API_BASE = (process.env.EXPO_PUBLIC_VEGZ_AGENT_API_URL || "http://10.0.2.2:8001").replace(/\/$/, "");
@@ -17,6 +17,12 @@ async function api<T>(path: string, token?: string, init: RequestInit = {}): Pro
 }
 
 export default function AgentApp() {
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, { toValue: 1, duration: 460, useNativeDriver: true }).start();
+    return () => enter.stopAnimation();
+  }, [enter]);
+
   const [token, setToken] = useState("");
   const [agent, setAgent] = useState<Agent | null>(null);
   const [orders, setOrders] = useState<Delivery[]>([]);
@@ -98,7 +104,7 @@ export default function AgentApp() {
   }
 
   if (!token || !agent) {
-    return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.page}>
+    return <SafeAreaView style={s.safe}><Animated.ScrollView style={{ opacity: enter }} contentContainerStyle={s.page}>
       <Text style={s.brand}>vegz<Text style={s.period}>agent.</Text></Text><Text style={s.eyebrow}>DELIVERY PARTNER APP</Text>
       <Text style={s.title}>Every stop counts.</Text><Text style={s.sub}>Accept deliveries, manage shop pickups and keep customers informed.</Text>
       <View style={s.card}><Text style={s.label}>Your name</Text><TextInput style={s.input} value={name} onChangeText={setName} placeholder="Full name"/>
@@ -108,7 +114,7 @@ export default function AgentApp() {
       <Action label={busy?"Signing in…":"Open delivery app"} onPress={signIn} disabled={busy||!phone.trim()||name.trim().length<2}/></View>
       <Text style={s.helper}>Development sign-in only. Real agents require verified OTP and admin approval before going online.</Text>
       {!!error&&<Text style={s.error}>{error}</Text>}{busy&&<ActivityIndicator color="#176b48"/>}
-    </ScrollView></SafeAreaView>;
+    </Animated.ScrollView></SafeAreaView>;
   }
 
   const nextActions: Record<string,{label:string;action:string}[]> = {
@@ -119,7 +125,7 @@ export default function AgentApp() {
     arrived_at_customer:[{label:"Confirm delivered",action:"delivered"},{label:"Delivery failed",action:"delivery_failed"}],
   };
 
-  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.page}>
+  return <SafeAreaView style={s.safe}><Animated.ScrollView style={{ opacity: enter }} contentContainerStyle={s.page}>
     <View style={s.header}><View><Text style={s.brand}>vegz<Text style={s.period}>agent.</Text></Text><Text style={s.muted}>{agent.full_name} · {agent.city}</Text></View><Pressable onPress={signOut}><Text style={s.link}>Sign out</Text></Pressable></View>
     <View style={s.hero}><Text style={s.eyebrow}>DELIVERY WORKSPACE</Text><Text style={s.title}>Ride safe. Deliver fresh.</Text><Text style={s.sub}>Your assigned deliveries and pickup sequence.</Text>
       <View style={s.onlineRow}><View><Text style={s.onlineTitle}>{agent.is_online?"You are online":"You are offline"}</Text><Text style={s.muted}>{agent.is_verified?"Approved delivery partner":"Waiting for admin approval"}</Text></View><Action label={agent.is_online?"Go offline":"Go online"} onPress={toggleOnline} disabled={busy||!agent.is_verified} compact/></View>
@@ -139,7 +145,7 @@ export default function AgentApp() {
     </View>)}
     <Action label={busy?"Working…":"Refresh workspace"} onPress={refresh} disabled={busy}/>
     <Text style={s.helper}>Live GPS collection is not enabled in this build. Pickup, status and proof-note actions are sent to the agent API.</Text>
-  </ScrollView></SafeAreaView>;
+  </Animated.ScrollView></SafeAreaView>;
 }
 
 function Action({label,onPress,disabled=false,secondary=false,compact=false}:{label:string;onPress:()=>void;disabled?:boolean;secondary?:boolean;compact?:boolean}) { return <Pressable onPress={onPress} disabled={disabled} style={[s.action,secondary&&s.actionSecondary,compact&&s.actionCompact,disabled&&s.disabled]}><Text style={[s.actionText,secondary&&s.actionTextSecondary]}>{label}</Text></Pressable>; }
