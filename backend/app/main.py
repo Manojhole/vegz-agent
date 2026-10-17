@@ -76,6 +76,29 @@ def _sync_customer_order(order: "DeliveryOrder") -> None:
     except (httpx.HTTPError, ValueError) as exc:
         import logging
         logging.getLogger("vegz.agent").warning("Customer order status sync failed (%s).", type(exc).__name__)
+def _sync_admin_agent_presence(agent: "Agent") -> None:
+    """Keep the admin operations view aligned with current agent availability."""
+    if not ADMIN_SERVICE_URL or len(PARTNER_ADMIN_TOKEN) < 32:
+        return
+    try:
+        response = httpx.post(
+            ADMIN_SERVICE_URL + "/api/internal/agent-presence",
+            headers={"Authorization": "Bearer " + PARTNER_ADMIN_TOKEN},
+            json={
+                "phone": agent.phone,
+                "external_ref": "vegz-agent:" + str(agent.id),
+                "is_online": bool(agent.is_online and agent.is_verified),
+                "is_verified": bool(agent.is_verified),
+                "city": agent.city,
+            },
+            timeout=4.0,
+        )
+        response.raise_for_status()
+    except (httpx.HTTPError, ValueError) as exc:
+        import logging
+        logging.getLogger("vegz.agent").warning("Admin agent presence sync failed (%s).", type(exc).__name__)
+
+
 if APP_ENV == "production" and (len(PARTNER_ADMIN_TOKEN) < 32 or "replace-with" in PARTNER_ADMIN_TOKEN.lower() or "change-before-production" in PARTNER_ADMIN_TOKEN or not ADMIN_SERVICE_URL):
     raise RuntimeError("Configure ADMIN_SERVICE_URL and a unique PARTNER_ADMIN_TOKEN before production.")
 engine_kwargs = {"pool_pre_ping": True}
@@ -418,6 +441,7 @@ def update_me(payload: AgentProfilePatch, agent: Agent = Depends(current_agent),
         setattr(agent, key, value)
     db.commit()
     db.refresh(agent)
+    _sync_admin_agent_presence(agent)
     return agent_payload(agent)
 
 
