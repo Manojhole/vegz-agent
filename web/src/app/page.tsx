@@ -49,9 +49,18 @@ export default function AgentHomePage(){
    finally{setBusy(false);}
  }
  async function availability(){
-   if(!token||!agent)return;setBusy(true);setError("");setNotice("");
-   try{await request<Agent>("/api/me",token,{method:"PATCH",body:JSON.stringify({is_online:!agent.is_online})});await load(token);}
-   catch(e){setError(e instanceof Error?e.message:"Could not update availability.");}
+   if(!token||!agent)return;
+   setError("");setNotice("");
+   if(!agent.is_verified){
+     setError("Your account is awaiting admin verification. You can go online and receive delivery assignments after approval.");
+     return;
+   }
+   setBusy(true);
+   try{
+     await request<Agent>("/api/me",token,{method:"PATCH",body:JSON.stringify({is_online:!agent.is_online})});
+     await load(token);
+     setNotice(!agent.is_online ? "You are online and eligible for delivery assignments." : "You are offline and will not receive new assignments.");
+   } catch(e){setError(e instanceof Error?e.message:"Could not update availability.");}
    finally{setBusy(false);}
  }
  async function seed(){
@@ -90,7 +99,7 @@ export default function AgentHomePage(){
    <div className="agent-layout"><aside className="agent-sidebar"><div className="agent-profile"><span>🛵</span><div><strong>{agent.full_name}</strong><small>{agent.city} delivery partner</small></div></div><button className={!history?"active":""} onClick={()=>setHistory(false)}>▣ Active deliveries</button><button className={history?"active":""} onClick={()=>setHistory(true)}>☷ Delivery history</button><div className="agent-sidebar-note"><strong>Pickup checklist</strong><p>Confirm each shop stop before handing the order to the customer.</p></div></aside>
     <section className="agent-workspace"><div className="agent-heading"><div><p className="agent-eyebrow">VEGZ AGENT / {history?"HISTORY":"WORKSPACE"}</p><h1>{history?"Delivery history":"Ride safe. Deliver fresh."}</h1><p>{history?"Completed and failed deliveries from your account.":"Your assignments, pickup sequence and delivery status."}</p></div><span className={"agent-state "+(agent.is_online?"online":"offline")}>{agent.is_online?"● Online":"● Offline"}</span></div>
      {error&&<div className="agent-alert error">{error}</div>}{notice&&<div className="agent-alert success">{notice}</div>}
-     <div className="agent-summary"><article><small>Visible deliveries</small><strong>{visible.length}</strong></article><article><small>Availability</small><strong>{agent.is_online?"Online":"Offline"}</strong></article><article><small>Approval</small><strong>{agent.is_verified?"Verified":"Pending"}</strong></article><div><p>{agent.is_verified?"You are cleared to receive work.":"Your account needs admin approval before going online."}</p><button className={agent.is_online?"agent-secondary":"agent-primary"} onClick={availability} disabled={busy||!agent.is_verified}>{agent.is_online?"Go offline":"Go online"}</button></div></div>
+     <div className="agent-summary"><article><small>Visible deliveries</small><strong>{visible.length}</strong></article><article><small>Availability</small><strong>{agent.is_online?"Online":"Offline"}</strong></article><article><small>Approval</small><strong>{agent.is_verified?"Verified":"Pending"}</strong></article><div><p>{agent.is_verified?"You are cleared to receive work.":"Your account needs admin approval before going online."}</p><button className={agent.is_online?"agent-secondary":"agent-primary"} onClick={availability} disabled={busy}>{busy?"Updating…":!agent.is_verified?"Awaiting approval":agent.is_online?"Go offline":"Go online"}</button></div></div>
      {!history&&visible.length===0&&<div className="agent-empty"><span>✓</span><h2>No active deliveries</h2><p>Dispatch assignments appear here. For local development only, load sample jobs.</p><button className="agent-primary" onClick={seed} disabled={busy}>Load demo deliveries</button></div>}
      <div className="agent-deliveries">{visible.map(order=><article key={order.id} className="agent-delivery-card"><div className="agent-delivery-head"><div><small>DELIVERY CODE</small><h2>{order.code}</h2></div><span className="agent-order-status">{order.status.replaceAll("_"," ")}</span></div><div className="agent-customer"><div><small>CUSTOMER</small><strong>{order.customer_name}</strong><p>{order.customer_phone}</p></div><div><small>DELIVERY TO</small><strong>{order.delivery_city}</strong><p>{order.delivery_address}</p></div></div>{order.delivery_instructions&&<p className="agent-instructions">Delivery note: {order.delivery_instructions}</p>}<div className="agent-route"><h3>Pickup sequence</h3>{(order.pickup_stops&&order.pickup_stops.length?order.pickup_stops:[{shop_name:"Pickup shop",shop_address:order.pickup_address}]).map((stop,i)=><div key={i} className="agent-stop"><span className={i<order.pickup_progress?"done":i===order.pickup_progress?"current":""}>{i<order.pickup_progress?"✓":i+1}</span><div><strong>{stop.shop_name||"Shop pickup"}</strong><p>{stop.shop_address||stop.address||order.pickup_address}</p></div>{i<order.pickup_progress&&<small>Picked up</small>}</div>)}</div><div className="agent-items"><small>ORDER ITEMS</small><p>{order.item_summary||"Order details"}</p><strong>₹{Number(order.total_amount||0).toFixed(2)}</strong></div>{!history&&(actions[order.status]||[]).length>0&&<><label className="agent-note-label">Handoff note / reason (required for selected actions)</label><input className="agent-note-input" value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Received by customer or reason for failure"/><div className="agent-actions">{(actions[order.status]||[]).map(a=><button key={a.action} className={["decline","delivery_failed","cancel_assignment"].includes(a.action)?"agent-secondary":"agent-primary"} onClick={()=>void act(order,a.action)} disabled={busy}>{a.label}</button>)}</div></>}</article>)}</div>
      <p className="agent-disclaimer">Live GPS tracking, push notifications and photo/OTP proof of delivery are not configured in this development build.</p>
