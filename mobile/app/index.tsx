@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
-const API_BASE = (process.env.EXPO_PUBLIC_VEGZ_AGENT_API_URL || "http://10.0.2.2:8001").replace(/\/$/, "");
+const expoHostValue = (Constants.expoConfig as any)?.hostUri || (Constants as any).expoGoConfig?.debuggerHost;
+const expoHost = typeof expoHostValue === "string" ? expoHostValue.split(":")[0] : "";
+const detectedApiBase = expoHost ? `http://${expoHost}:8001` : "http://10.0.2.2:8001";
+const API_BASE = (process.env.EXPO_PUBLIC_VEGZ_AGENT_API_URL || detectedApiBase).replace(/\/$/, "");
 
 type Agent = { id: number; full_name: string; phone: string; city: string; vehicle_type: string; vehicle_number: string; is_online: boolean; is_verified: boolean };
 type PickupStop = { shop_name?: string; shop_address?: string; address?: string; phone?: string };
